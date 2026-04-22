@@ -7,7 +7,6 @@ PocketAquarium.Godot/tests/bin/
 PocketAquarium.Godot/tests/obj/
 PocketAquarium.Godot/*.csproj.user
 PocketAquarium.Godot/tests/*.csproj.user
-PocketAquarium.Godot/export_presets.cfg
 PocketAquarium.Godot/mono_crash.*.json
 
 # Exports

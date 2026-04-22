@@ -4,31 +4,39 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
-  build:
+  dotnet-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          dotnet-version: 8.0.x
 
-      - name: Install
-        run: npm ci
+      - name: Restore
+        working-directory: PocketAquarium.Godot
+        run: dotnet restore
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
+      - name: Build (tests project only, game project needs Godot SDK)
+        working-directory: PocketAquarium.Godot
+        run: dotnet build tests/PocketAquarium.Tests.csproj
 
       - name: Test
-        run: npm test
+        working-directory: PocketAquarium.Godot
+        run: dotnet test tests/PocketAquarium.Tests.csproj --no-build --verbosity normal
 
-      - name: Build
-        run: npm run build
+  asset-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate manifest
+        run: python scripts/build_assets.py --check-dims

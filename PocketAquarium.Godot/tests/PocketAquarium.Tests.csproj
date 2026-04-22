@@ -5,6 +5,10 @@
     <Nullable>enable</Nullable>
     <LangVersion>12</LangVersion>
     <RootNamespace>PocketAquarium.Tests</RootNamespace>
+    <!-- Allow running against newer runtimes (e.g. .NET 10) if 8.0 isn't installed.
+         Tests compile against 8.0 for the game project's sake, but the test host
+         can roll forward at runtime. -->
+    <RollForward>LatestMajor</RollForward>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
@@ -18,6 +22,7 @@
     <Compile Include="..\scripts\systems\IsoGrid.cs" Link="SUT\IsoGrid.cs" />
     <Compile Include="..\scripts\systems\PathFinder.cs" Link="SUT\PathFinder.cs" />
     <Compile Include="..\scripts\systems\WillingnessModel.cs" Link="SUT\WillingnessModel.cs" />
+    <Compile Include="..\scripts\systems\GameState.cs" Link="SUT\GameState.cs" />
     <Compile Include="..\scripts\systems\SaveService.cs" Link="SUT\SaveService.cs" />
     <Compile Include="..\scripts\data\Species.cs" Link="SUT\Species.cs" />
     <Compile Include="..\scripts\data\DecorCatalog.cs" Link="SUT\DecorCatalog.cs" />

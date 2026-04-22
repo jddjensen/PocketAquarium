@@ -1,0 +1,106 @@
+[gd_resource type="Theme" load_steps=8 format=3 uid="uid://b0000000theme"]
+
+; Safari-tycoon palette theme. Cream panels, deep-forest text, coral accents.
+; Colors derived from PocketAquarium.Palette (see scripts/data/GameConstants.cs).
+; 8px base font size — pixel-art friendly.
+
+[sub_resource type="StyleBoxFlat" id="panel_cream"]
+; Panel / Control default background — cream card with coral border.
+bg_color = Color(1, 0.9686, 0.8824, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 0.4314, 0.3569, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="button_normal"]
+; Default button — cream with muted gray outline.
+bg_color = Color(1, 0.9686, 0.8824, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1137, 0.4196, 0.2627, 1)
+
+[sub_resource type="StyleBoxFlat" id="button_hover"]
+; Hover — sand fill hints clickability.
+bg_color = Color(0.9059, 0.7882, 0.5412, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1137, 0.2392, 0.1804, 1)
+
+[sub_resource type="StyleBoxFlat" id="button_pressed"]
+; Pressed / active — coral border pops, cream fill.
+bg_color = Color(1, 0.9686, 0.8824, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.4314, 0.3569, 1)
+
+[sub_resource type="StyleBoxFlat" id="button_disabled"]
+bg_color = Color(0.9059, 0.7882, 0.5412, 0.5)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.42, 0.451, 0.486, 1)
+
+[sub_resource type="StyleBoxFlat" id="panel_accent_header"]
+; Used on panel headers — solid coral strip.
+bg_color = Color(1, 0.4314, 0.3569, 1)
+
+[sub_resource type="StyleBoxEmpty" id="empty"]
+; Used where we want no visible styling (e.g. Label backgrounds).
+
+[resource]
+default_font_size = 8
+default_base_scale = 1.0
+
+; Panel
+Panel/styles/panel = SubResource("panel_cream")
+
+; PanelContainer
+PanelContainer/styles/panel = SubResource("panel_cream")
+
+; Button
+Button/colors/font_color = Color(0.1137, 0.2392, 0.1804, 1)
+Button/colors/font_hover_color = Color(0.1137, 0.2392, 0.1804, 1)
+Button/colors/font_pressed_color = Color(1, 0.4314, 0.3569, 1)
+Button/colors/font_disabled_color = Color(0.42, 0.451, 0.486, 1)
+Button/styles/normal = SubResource("button_normal")
+Button/styles/hover = SubResource("button_hover")
+Button/styles/pressed = SubResource("button_pressed")
+Button/styles/disabled = SubResource("button_disabled")
+Button/styles/focus = SubResource("empty")
+Button/constants/h_separation = 4
+
+; Label
+Label/colors/font_color = Color(0.1137, 0.2392, 0.1804, 1)
+Label/colors/font_shadow_color = Color(0, 0, 0, 0)
+
+; Label — accent variant for gold money/coin text
+Label/colors/font_color_accent_gold = Color(1, 0.8196, 0.4, 1)
+; Label — muted variant for hints
+Label/colors/font_color_muted = Color(0.42, 0.451, 0.486, 1)
+; Label — coral for alerts/demand-negative
+Label/colors/font_color_coral = Color(1, 0.4314, 0.3569, 1)
+
+; RichTextLabel — same base color
+RichTextLabel/colors/default_color = Color(0.1137, 0.2392, 0.1804, 1)
+
+; LineEdit / SpinBox — consistent cream frame
+LineEdit/styles/normal = SubResource("button_normal")
+LineEdit/styles/focus = SubResource("button_pressed")
+LineEdit/colors/font_color = Color(0.1137, 0.2392, 0.1804, 1)
+LineEdit/colors/font_placeholder_color = Color(0.42, 0.451, 0.486, 1)
+
+; Used to draw the coral header bar in BuildPanel / CreaturePanel headers
+; via `add_theme_stylebox_override("panel", ...)` — reference by name.
+PanelAccentHeader/styles/panel = SubResource("panel_accent_header")
