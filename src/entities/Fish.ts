@@ -40,6 +40,10 @@ export class Fish {
     return this.sprite.y;
   }
 
+  setDepth(depth: number): void {
+    this.sprite.setDepth(depth);
+  }
+
   destroy(): void {
     this.sprite.destroy();
   }

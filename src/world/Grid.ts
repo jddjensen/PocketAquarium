@@ -1,4 +1,13 @@
-import { DOOR, GRID_COLS, GRID_ROWS, TILE_SIZE, WAREHOUSE } from '../constants';
+import {
+  DOOR,
+  GRID_COLS,
+  GRID_ROWS,
+  ISO_ORIGIN_X,
+  ISO_ORIGIN_Y,
+  ISO_TILE_H,
+  ISO_TILE_W,
+  WAREHOUSE,
+} from '../constants';
 
 export type TileKind = 'exterior' | 'wall' | 'door' | 'floor' | 'path' | 'tank' | 'decor';
 
@@ -62,11 +71,30 @@ export class Grid {
     return t?.kind === 'path' || t?.kind === 'door';
   }
 
+  /**
+   * Iso projection of a tile (or half-tile — col/row may be fractional for
+   * centering multi-tile sprites). Returns the screen-space position of the
+   * diamond center.
+   */
   static tileToWorld(col: number, row: number): { x: number; y: number } {
-    return { x: col * TILE_SIZE + TILE_SIZE / 2, y: row * TILE_SIZE + TILE_SIZE / 2 };
+    return {
+      x: ISO_ORIGIN_X + (col - row) * (ISO_TILE_W / 2),
+      y: ISO_ORIGIN_Y + (col + row) * (ISO_TILE_H / 2),
+    };
   }
 
+  /** Inverse iso projection. Screen coords → integer tile coords. */
   static worldToTile(x: number, y: number): { col: number; row: number } {
-    return { col: Math.floor(x / TILE_SIZE), row: Math.floor(y / TILE_SIZE) };
+    const lx = (x - ISO_ORIGIN_X) / (ISO_TILE_W / 2);
+    const ly = (y - ISO_ORIGIN_Y) / (ISO_TILE_H / 2);
+    return {
+      col: Math.floor((lx + ly) / 2),
+      row: Math.floor((ly - lx) / 2),
+    };
+  }
+
+  /** Back-to-front painter-sort key. Larger = drawn on top. */
+  static tileDepth(col: number, row: number): number {
+    return col + row;
   }
 }

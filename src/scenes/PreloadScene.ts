@@ -1,5 +1,12 @@
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH, PALETTE, TILE_SIZE } from '../constants';
+import {
+  GAME_HEIGHT,
+  GAME_WIDTH,
+  ISO_TILE_H,
+  ISO_TILE_W,
+  ISO_WALL_HEIGHT,
+  PALETTE,
+} from '../constants';
 import { ALL_SPECIES, type SpeciesPalette } from '../data/species';
 
 type PixelGrid = (number | null)[][];
@@ -130,11 +137,14 @@ export class PreloadScene extends Phaser.Scene {
       this.drawGrid(`guest-${dir}-1`, this.guestGrid(dir, 1));
     }
 
-    this.drawGrid('tile-path', this.pathTileGrid());
-    this.drawGrid('tile-floor', this.floorTileGrid());
-    this.drawGrid('tile-grass', this.grassTileGrid());
-    this.drawGrid('tile-wall', this.wallTileGrid());
-    this.drawGrid('tile-door', this.doorTileGrid());
+    this.drawGrid('tile-path', this.isoDiamondTile(PALETTE.path, PALETTE.sandShadow, 0xfcd97b));
+    this.drawGrid('tile-floor', this.isoDiamondTile(PALETTE.floor, PALETTE.sandShadow, null));
+    this.drawGrid(
+      'tile-grass',
+      this.isoDiamondTile(PALETTE.grass, PALETTE.grassShade, PALETTE.grassHighlight),
+    );
+    this.drawGrid('tile-wall', this.isoWallTile());
+    this.drawGrid('tile-door', this.isoDoorTile());
 
     const tankSizes: [number, number][] = [
       [2, 2],
@@ -144,8 +154,8 @@ export class PreloadScene extends Phaser.Scene {
       [4, 3],
     ];
     for (const [w, h] of tankSizes) {
-      this.drawGrid(`tank-${w}x${h}-a`, this.tankGrid(w, h, 0));
-      this.drawGrid(`tank-${w}x${h}-b`, this.tankGrid(w, h, 1));
+      this.drawGrid(`tank-${w}x${h}-a`, this.isoTankGrid(w, h, 0));
+      this.drawGrid(`tank-${w}x${h}-b`, this.isoTankGrid(w, h, 1));
     }
   }
 
@@ -355,76 +365,106 @@ export class PreloadScene extends Phaser.Scene {
     ];
   }
 
-  private pathTileGrid(): PixelGrid {
-    const base = PALETTE.path;
-    const dark = PALETTE.sandShadow;
-    const light = 0xfcd97b;
+  /**
+   * Returns the pixel mask for a single iso diamond tile (ISO_TILE_W × ISO_TILE_H).
+   * `true` cells are inside the rhombus. Used by tile/pool generators to limit
+   * drawing to the diamond footprint.
+   */
+  private isoDiamondMask(): boolean[][] {
+    const w = ISO_TILE_W;
+    const h = ISO_TILE_H;
+    const cx = w / 2;
+    const cy = h / 2;
+    const mask: boolean[][] = [];
+    for (let y = 0; y < h; y++) {
+      const row: boolean[] = [];
+      for (let x = 0; x < w; x++) {
+        const dx = Math.abs(x + 0.5 - cx) / cx;
+        const dy = Math.abs(y + 0.5 - cy) / cy;
+        row.push(dx + dy <= 1);
+      }
+      mask.push(row);
+    }
+    return mask;
+  }
+
+  /**
+   * Diamond floor tile. `base` fills the interior, `edge` outlines the rhombus,
+   * optional `hi` speckle adds texture.
+   */
+  private isoDiamondTile(base: number, edge: number, hi: number | null): PixelGrid {
+    const mask = this.isoDiamondMask();
+    const w = ISO_TILE_W;
+    const h = ISO_TILE_H;
     const grid: PixelGrid = [];
-    for (let y = 0; y < TILE_SIZE; y++) {
+    for (let y = 0; y < h; y++) {
       const row: (number | null)[] = [];
-      for (let x = 0; x < TILE_SIZE; x++) {
-        const edge = x === 0 || y === 0 || x === TILE_SIZE - 1 || y === TILE_SIZE - 1;
-        const hashLight = (x + y) % 6 === 0;
-        const hashDark = (x * 3 + y * 5) % 19 === 0;
-        row.push(edge ? dark : hashDark ? dark : hashLight ? light : base);
+      for (let x = 0; x < w; x++) {
+        if (!mask[y]![x]) {
+          row.push(null);
+          continue;
+        }
+        const onEdge =
+          !mask[y]![x - 1] ||
+          !mask[y]![x + 1] ||
+          !(mask[y - 1]?.[x] ?? false) ||
+          !(mask[y + 1]?.[x] ?? false);
+        if (onEdge) {
+          row.push(edge);
+          continue;
+        }
+        const speckle = hi != null && (x * 3 + y * 7) % 11 === 0;
+        row.push(speckle ? hi : base);
       }
       grid.push(row);
     }
     return grid;
   }
 
-  private floorTileGrid(): PixelGrid {
-    const base = PALETTE.floor;
-    const dark = PALETTE.sandShadow;
-    const grid: PixelGrid = [];
-    for (let y = 0; y < TILE_SIZE; y++) {
-      const row: (number | null)[] = [];
-      for (let x = 0; x < TILE_SIZE; x++) {
-        const speck = (x * 7 + y * 11) % 23 === 0;
-        row.push(speck ? dark : base);
-      }
-      grid.push(row);
-    }
-    return grid;
-  }
-
-  private grassTileGrid(): PixelGrid {
-    const base = PALETTE.grass;
-    const shade = PALETTE.grassShade;
-    const hi = PALETTE.grassHighlight;
-    const grid: PixelGrid = [];
-    for (let y = 0; y < TILE_SIZE; y++) {
-      const row: (number | null)[] = [];
-      for (let x = 0; x < TILE_SIZE; x++) {
-        const blade = (x * 3 + y * 7) % 11 === 0;
-        const dark = (x * 5 + y * 2) % 17 === 0;
-        row.push(blade ? hi : dark ? shade : base);
-      }
-      grid.push(row);
-    }
-    return grid;
-  }
-
-  /** Stone brick wall with light edge on top/left, shadow on bottom/right. */
-  private wallTileGrid(): PixelGrid {
+  /**
+   * Tall wall sprite: iso-diamond top cap at the bottom, brick face rising above.
+   * Sprite dims: ISO_TILE_W × (ISO_TILE_H + ISO_WALL_HEIGHT). Intended to be
+   * drawn with origin (0.5, 1) at the tile center offset down by TILE_H/2 so the
+   * diamond base aligns with the floor it sits on.
+   */
+  private isoWallTile(): PixelGrid {
+    const w = ISO_TILE_W;
+    const totalH = ISO_TILE_H + ISO_WALL_HEIGHT;
+    const mask = this.isoDiamondMask();
     const base = PALETTE.brick;
     const shade = PALETTE.brickShade;
     const hi = PALETTE.brickHighlight;
+    const capLight = PALETTE.stone;
+    const capDark = PALETTE.stoneShadow;
     const grid: PixelGrid = [];
-    for (let y = 0; y < TILE_SIZE; y++) {
+    for (let y = 0; y < totalH; y++) {
       const row: (number | null)[] = [];
-      for (let x = 0; x < TILE_SIZE; x++) {
-        const topEdge = y === 0;
-        const leftEdge = x === 0;
-        const bottomEdge = y === TILE_SIZE - 1;
-        const rightEdge = x === TILE_SIZE - 1;
+      for (let x = 0; x < w; x++) {
+        if (y >= ISO_WALL_HEIGHT) {
+          // Bottom cap — iso diamond top of the wall block.
+          const my = y - ISO_WALL_HEIGHT;
+          if (!mask[my]![x]) {
+            row.push(null);
+            continue;
+          }
+          const onEdge =
+            !mask[my]![x - 1] ||
+            !mask[my]![x + 1] ||
+            !(mask[my - 1]?.[x] ?? false) ||
+            !(mask[my + 1]?.[x] ?? false);
+          row.push(onEdge ? capDark : capLight);
+          continue;
+        }
+        // Face — full column; the diamond cap below hides the rectangular overhang.
         const brickRow = Math.floor(y / 4);
         const offset = brickRow % 2 === 0 ? 0 : 4;
         const mortarX = (x + offset) % 8 === 0;
         const mortarY = y % 4 === 0;
-
+        const topEdge = y === 0;
+        const leftEdge = x === 0;
+        const rightEdge = x === w - 1;
         if (topEdge || leftEdge) row.push(hi);
-        else if (bottomEdge || rightEdge) row.push(shade);
+        else if (rightEdge) row.push(shade);
         else if (mortarX || mortarY) row.push(shade);
         else row.push(base);
       }
@@ -433,76 +473,75 @@ export class PreloadScene extends Phaser.Scene {
     return grid;
   }
 
-  /** Wooden door with a brass handle. */
-  private doorTileGrid(): PixelGrid {
+  /** Door uses the wall silhouette with a wooden panel + handle on the face. */
+  private isoDoorTile(): PixelGrid {
+    const grid = this.isoWallTile();
     const wood = PALETTE.doorWood;
     const dark = PALETTE.doorWoodShade;
     const light = PALETTE.doorWoodHighlight;
     const handle = PALETTE.doorHandle;
-    const frame = PALETTE.brickShade;
-    const grid: PixelGrid = [];
-    for (let y = 0; y < TILE_SIZE; y++) {
-      const row: (number | null)[] = [];
-      for (let x = 0; x < TILE_SIZE; x++) {
-        if (x === 0 || x === TILE_SIZE - 1 || y === 0) {
-          row.push(frame);
-          continue;
-        }
-        if (x === 1 || x === TILE_SIZE - 2 || y === 1) {
-          row.push(light);
-          continue;
-        }
-        const plankSeam = x === 5 || x === 10;
-        const grain = (x + y * 2) % 7 === 0;
-        if (x === TILE_SIZE - 4 && y === 8) {
-          row.push(handle);
-          continue;
-        }
-        row.push(plankSeam ? dark : grain ? dark : wood);
+    const w = ISO_TILE_W;
+    const doorLeft = 3;
+    const doorRight = w - 4;
+    for (let y = 2; y < ISO_WALL_HEIGHT - 1; y++) {
+      for (let x = doorLeft; x <= doorRight; x++) {
+        const onDoorEdge = x === doorLeft || x === doorRight || y === 2;
+        const plankSeam = x === Math.floor(w / 2);
+        grid[y]![x] = onDoorEdge ? light : plankSeam ? dark : wood;
       }
-      grid.push(row);
+    }
+    // handle
+    if (grid[ISO_WALL_HEIGHT - 6]) {
+      grid[ISO_WALL_HEIGHT - 6]![doorRight - 1] = handle;
     }
     return grid;
   }
 
   /**
-   * Tank frame with glass highlights in the corners, animated water surface
-   * ripples (frame 0 vs frame 1), and a subtle ambient water gradient.
+   * Iso tank pool for an N×M tile footprint. Renders as a rhombus with a dark
+   * rim, two-tone water, and a brighter surface band near the back edges. The
+   * ripple `frame` parameter shifts the highlight pattern each beat for the
+   * animated water surface.
    */
-  private tankGrid(cols: number, rows: number, frame: 0 | 1): PixelGrid {
-    const w = cols * TILE_SIZE;
-    const h = rows * TILE_SIZE;
+  private isoTankGrid(cols: number, rows: number, frame: 0 | 1): PixelGrid {
+    const w = (cols + rows) * (ISO_TILE_W / 2);
+    const h = (cols + rows) * (ISO_TILE_H / 2);
     const water = PALETTE.waterMid;
     const waterDeep = PALETTE.waterDeep;
     const waterLight = PALETTE.waterLight;
     const surface = PALETTE.waterSurface;
     const surfaceHi = 0xa8f4fb;
-    const frame1 = PALETTE.stoneShadow;
-    const frame2 = PALETTE.stone;
-    const frame3 = 0x8aa0bf;
+    const rim = PALETTE.stoneShadow;
+    const rimLit = PALETTE.stone;
     const grid: PixelGrid = [];
+    const cx = w / 2;
+    const cy = h / 2;
     for (let y = 0; y < h; y++) {
       const row: (number | null)[] = [];
       for (let x = 0; x < w; x++) {
-        const onOuter = x === 0 || y === 0 || x === w - 1 || y === h - 1;
-        const onInner = x === 1 || y === 1 || x === w - 2 || y === h - 2;
-        if (onOuter) {
-          row.push(frame1);
+        const dx = Math.abs(x + 0.5 - cx) / cx;
+        const dy = Math.abs(y + 0.5 - cy) / cy;
+        const sum = dx + dy;
+        if (sum > 1) {
+          row.push(null);
           continue;
         }
-        if (onInner) {
-          const lit = (x <= 2 && y <= 4) || (y <= 2 && x <= 4);
-          row.push(lit ? frame3 : frame2);
+        if (sum > 0.9) {
+          // outer rim — brighter on the back (upper) edges
+          const back = y < cy;
+          row.push(back ? rimLit : rim);
           continue;
         }
-        if (y <= 3) {
+        // Water interior: depth from top→bottom, ripple sparkle near top.
+        const nearTop = y < cy - (cy * 0.5);
+        if (nearTop) {
           const rippleOffset = frame === 0 ? 0 : 1;
           const isHi = (x + rippleOffset) % 5 === 0;
           row.push(isHi ? surfaceHi : surface);
           continue;
         }
         const depth = y / h;
-        const tone = depth > 0.7 ? waterDeep : depth < 0.35 ? waterLight : water;
+        const tone = depth > 0.7 ? waterDeep : depth < 0.4 ? waterLight : water;
         row.push((x * 5 + y * 3) % 29 === 0 ? waterLight : tone);
       }
       grid.push(row);

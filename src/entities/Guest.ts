@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TILE_SIZE } from '../constants';
+import { ISO_TILE_H } from '../constants';
 import { Grid } from '../world/Grid';
 
 const WALK_SPEED = 18;
@@ -31,7 +31,12 @@ export class Guest {
   ) {
     const start = path[0] ?? { col: 0, row: 0 };
     const { x, y } = Grid.tileToWorld(start.col, start.row);
-    this.sprite = scene.add.image(x, y, 'guest-down-0');
+    // Guest sprites are 8×10 — anchor bottom-center so feet align with the tile
+    // diamond's center bottom edge.
+    this.sprite = scene.add
+      .image(x, y + ISO_TILE_H / 2, 'guest-down-0')
+      .setOrigin(0.5, 1)
+      .setDepth(Grid.tileDepth(start.col, start.row));
   }
 
   update(dt: number): boolean {
@@ -42,29 +47,43 @@ export class Guest {
       return true;
     }
 
+    const current = this.path[this.pathIdx];
     const next = this.path[this.pathIdx + 1];
-    if (!next) {
+    if (!next || !current) {
       this.callbacks.onExit(this, this.satisfaction);
       this.sprite.destroy();
       return false;
     }
 
+    // Sprite anchor = bottom of tile diamond (iso center + half tile height).
     const { x: tx, y: ty } = Grid.tileToWorld(next.col, next.row);
-    const dx = tx - this.sprite.x;
-    const dy = ty - this.sprite.y;
+    const targetX = tx;
+    const targetY = ty + ISO_TILE_H / 2;
+    const dx = targetX - this.sprite.x;
+    const dy = targetY - this.sprite.y;
     const dist = Math.hypot(dx, dy);
     const step = WALK_SPEED * dt;
 
-    this.updateFacing(dx, dy);
+    // Facing is derived from grid-space (logical) direction, not screen-space,
+    // so characters face "north" when moving col-row-wise even though the iso
+    // screen delta points up-right.
+    this.updateFacing(next.col - current.col, next.row - current.row);
 
     if (dist <= step) {
-      this.sprite.x = tx;
-      this.sprite.y = ty;
+      this.sprite.x = targetX;
+      this.sprite.y = targetY;
       this.pathIdx += 1;
+      this.sprite.setDepth(Grid.tileDepth(next.col, next.row));
       this.checkForTankView(next.col, next.row);
     } else {
       this.sprite.x += (dx / dist) * step;
       this.sprite.y += (dy / dist) * step;
+      // Depth interpolates with progress so guests don't pop in front/behind
+      // a tank they're passing.
+      const progress = 1 - dist / Math.max(1, Math.hypot(tx + ISO_TILE_H / 2 - this.sprite.x, targetY - this.sprite.y));
+      const curDepth = Grid.tileDepth(current.col, current.row);
+      const nextDepth = Grid.tileDepth(next.col, next.row);
+      this.sprite.setDepth(curDepth + (nextDepth - curDepth) * progress);
     }
 
     this.frameTimer += dt * 1000;
@@ -75,9 +94,16 @@ export class Guest {
     return true;
   }
 
-  private updateFacing(dx: number, dy: number): void {
+  /** Grid-space dcol/drow → 4-way facing. Matches the sprite atlas directions. */
+  private updateFacing(dcol: number, drow: number): void {
     const nextFacing: Facing =
-      Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+      Math.abs(dcol) > Math.abs(drow)
+        ? dcol < 0
+          ? 'left'
+          : 'right'
+        : drow < 0
+          ? 'up'
+          : 'down';
     if (nextFacing !== this.facing) {
       this.facing = nextFacing;
       this.applyTexture();
@@ -151,4 +177,3 @@ export class Guest {
   }
 }
 
-export const GUEST_TILE_OFFSET = TILE_SIZE / 2;

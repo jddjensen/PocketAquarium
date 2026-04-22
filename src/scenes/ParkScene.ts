@@ -6,8 +6,10 @@ import {
   GAME_WIDTH,
   GRID_COLS,
   GRID_ROWS,
+  ISO_TILE_H,
+  ISO_TILE_W,
   PALETTE,
-  TILE_SIZE,
+  WAREHOUSE,
 } from '../constants';
 import { Grid } from '../world/Grid';
 import { Tank } from '../entities/Tank';
@@ -37,7 +39,7 @@ const CROWD_PENALTY_SLOPE = 5;
 export class ParkScene extends Phaser.Scene {
   private grid!: Grid;
   private placementLayer!: Phaser.GameObjects.Container;
-  private hoverMarker!: Phaser.GameObjects.Rectangle;
+  private hoverMarker!: Phaser.GameObjects.Polygon;
   private tanks: Tank[] = [];
   private decor: Decor[] = [];
   private guests: Guest[] = [];
@@ -54,9 +56,10 @@ export class ParkScene extends Phaser.Scene {
     this.drawBackdrop();
     this.placementLayer = this.add.container(0, 0);
     this.hoverMarker = this.add
-      .rectangle(0, 0, TILE_SIZE, TILE_SIZE, PALETTE.uiAccent, 0.25)
+      .polygon(0, 0, this.isoDiamondPoints(1, 1), PALETTE.uiAccent, 0.25)
       .setOrigin(0, 0)
       .setStrokeStyle(1, PALETTE.uiAccent)
+      .setDepth(10_000)
       .setVisible(false);
 
     this.hydrateFromState();
@@ -101,45 +104,73 @@ export class ParkScene extends Phaser.Scene {
   }
 
   /**
-   * Static backdrop: grass everywhere, warehouse floor inside the walls, brick
-   * walls around the perimeter, and the door cut into the bottom wall.
+   * Iso backdrop. Floor tiles are drawn first (low depth), then walls painted
+   * back-to-front by `col + row` so taller wall sprites correctly occlude
+   * anything behind them. Only back walls (north + west perimeter) are drawn —
+   * the south/east sides remain blocking for placement but render as floor so
+   * the player can see into the building.
    */
   private drawBackdrop(): void {
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
         const tile = this.grid.get(c, r);
         if (!tile) continue;
-        let key: string;
-        switch (tile.kind) {
-          case 'exterior':
-            key = 'tile-grass';
-            break;
-          case 'wall':
-            key = 'tile-wall';
-            break;
-          case 'door':
-            key = 'tile-door';
-            break;
-          default:
-            key = 'tile-floor';
-            break;
+        const { x, y } = Grid.tileToWorld(c, r);
+        const isBackWall = tile.kind === 'wall' && this.isBackWall(c, r);
+        const isBackDoor = tile.kind === 'door' && this.isBackWall(c, r);
+
+        // Always lay a ground tile under everything for clean seams.
+        const groundKey =
+          tile.kind === 'exterior'
+            ? 'tile-grass'
+            : tile.kind === 'wall' || tile.kind === 'door' || tile.kind === 'floor'
+              ? 'tile-floor'
+              : 'tile-floor';
+        this.add.image(x, y, groundKey).setOrigin(0.5, 0.5).setDepth(Grid.tileDepth(c, r) - 1000);
+
+        if (isBackWall || isBackDoor) {
+          const key = isBackDoor ? 'tile-door' : 'tile-wall';
+          this.add
+            .image(x, y + ISO_TILE_H / 2, key)
+            .setOrigin(0.5, 1)
+            .setDepth(Grid.tileDepth(c, r));
         }
-        this.add.image(c * TILE_SIZE, r * TILE_SIZE, key).setOrigin(0, 0).setDepth(-10);
       }
     }
 
-    // Welcome path on the grass leading up to the door (cosmetic).
+    // Welcome path marker on the iso grass just outside the door.
     const spawnWorld = Grid.tileToWorld(ENTRANCE.col, ENTRANCE.row);
     this.add
-      .rectangle(
+      .polygon(
         spawnWorld.x,
-        spawnWorld.y - TILE_SIZE / 4,
-        TILE_SIZE - 2,
-        TILE_SIZE - 6,
+        spawnWorld.y,
+        this.isoDiamondPoints(1, 1),
         PALETTE.path,
-        0.7,
+        0.5,
       )
-      .setDepth(-9);
+      .setOrigin(0, 0)
+      .setDepth(Grid.tileDepth(ENTRANCE.col, ENTRANCE.row) - 500);
+  }
+
+  /** A warehouse perimeter cell is a "back" wall if it's on the north or west side. */
+  private isBackWall(col: number, row: number): boolean {
+    return col === WAREHOUSE.col || row === WAREHOUSE.row;
+  }
+
+  /**
+   * Vertex list for a diamond covering an N×M tile footprint, suitable for a
+   * Phaser.Polygon. Returned in local coords around (0,0) = rhombus top vertex.
+   */
+  private isoDiamondPoints(cols: number, rows: number): number[] {
+    const tw = ISO_TILE_W / 2;
+    const th = ISO_TILE_H / 2;
+    // Top, right, bottom, left vertices around the rhombus.
+    return [
+      cols * tw, 0,
+      (cols + rows) * tw, rows * th,
+      rows * tw, (cols + rows) * th,
+      0, cols * th,
+    ];
   }
 
   private hydrateFromState(): void {
@@ -157,9 +188,11 @@ export class ParkScene extends Phaser.Scene {
     for (const p of snap.paths) {
       if (!this.grid.inBounds(p.col, p.row)) continue;
       if (this.grid.get(p.col, p.row)?.kind !== 'floor') continue;
+      const { x, y } = Grid.tileToWorld(p.col, p.row);
       const tile = this.add
-        .image(p.col * TILE_SIZE, p.row * TILE_SIZE, 'tile-path')
-        .setOrigin(0, 0);
+        .image(x, y, 'tile-path')
+        .setOrigin(0.5, 0.5)
+        .setDepth(Grid.tileDepth(p.col, p.row) - 500);
       this.placementLayer.add(tile);
       this.grid.set(p.col, p.row, { kind: 'path' });
     }
@@ -202,14 +235,15 @@ export class ParkScene extends Phaser.Scene {
       this.hoverMarker.setVisible(false);
       return;
     }
-    this.hoverMarker.setPosition(col * TILE_SIZE, row * TILE_SIZE);
+    // The hover diamond is anchored at the top vertex of its footprint's
+    // rhombus, so its anchor is the iso projection of (col, row) shifted up
+    // by half a tile height (the diamond top vertex sits above the tile center).
+    const { x, y } = Grid.tileToWorld(col, row);
+    this.hoverMarker.setPosition(x, y - ISO_TILE_H / 2);
     const valid = this.isPlacementValid(tool, col, row);
     this.hoverMarker.setFillStyle(valid ? PALETTE.uiAccent : PALETTE.fishPurple, 0.25);
-    if (tool.kind === 'tank') {
-      this.hoverMarker.setSize(tool.size.w * TILE_SIZE, tool.size.h * TILE_SIZE);
-    } else {
-      this.hoverMarker.setSize(TILE_SIZE, TILE_SIZE);
-    }
+    const footprint = tool.kind === 'tank' ? tool.size : { w: 1, h: 1 };
+    this.hoverMarker.setTo(this.isoDiamondPoints(footprint.w, footprint.h));
     this.hoverMarker.setVisible(true);
   }
 

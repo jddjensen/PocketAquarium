@@ -5,6 +5,18 @@ export const TILE_SIZE = 16;
 export const GRID_COLS = Math.floor(GAME_WIDTH / TILE_SIZE);
 export const GRID_ROWS = Math.floor(GAME_HEIGHT / TILE_SIZE);
 
+/** Isometric projection (2:1 diamond). Square grid cells render as rhombi. */
+export const ISO_TILE_W = 16;
+export const ISO_TILE_H = 8;
+/**
+ * Screen-space offsets so the 20×11 grid (iso footprint 248×124) centers in
+ * the 320×180 canvas with headroom for walls sticking up.
+ */
+export const ISO_ORIGIN_X = 124;
+export const ISO_ORIGIN_Y = 40;
+/** Tall-wall face height above the diamond base, in pixels. */
+export const ISO_WALL_HEIGHT = 16;
+
 /** Warehouse building footprint (inclusive cells for outer walls). */
 export const WAREHOUSE = {
   col: 1,
