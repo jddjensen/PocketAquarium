@@ -53,3 +53,41 @@ Procedural sprites are small — match these or the scale/pixel-art feel will br
 - **itch.io** — <https://itch.io/game-assets/free/tag-pixel-art>
 
 Always add attribution to `/CREDITS.md` even for CC0 (best practice).
+
+## Making your own sprites with LibreSprite
+
+[LibreSprite](https://libresprite.github.io/) is the recommended editor — free,
+open-source (GPLv2), and its spritesheet export is supported natively.
+
+### Workflow for a multi-frame fish
+
+1. In LibreSprite: **File → New**, size `10×5` (small), `12×6` (medium), or
+   `14×7` (large). Match the dimensions table above exactly.
+2. Paint frame A on frame 1. Add frame 2 (**Frame → New Frame**) and paint
+   frame B (tail offset by 1px for the swim wiggle).
+3. **File → Export Sprite Sheet**.
+   - Sheet type: **By rows** (or Packed — either works).
+   - Output File: `public/assets/sprites/goldie-sheet.png`.
+   - JSON Data: enable, **Hash** format, same folder.
+4. Add to `manifest.json`:
+
+```json
+{
+  "sheets": {
+    "goldie": {
+      "image": "sprites/goldie-sheet.png",
+      "json": "sprites/goldie-sheet.json",
+      "frames": {
+        "fish-goldie-a": "goldie-sheet 0.aseprite",
+        "fish-goldie-b": "goldie-sheet 1.aseprite"
+      }
+    }
+  }
+}
+```
+
+The frame names on the right must match the keys LibreSprite writes into the
+JSON (`"filename"` field per frame). Open the JSON to confirm.
+
+For one-off sprites (single frame, no animation), skip the sheet and use a
+plain `"textures"` entry — it's lighter weight.

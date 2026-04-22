@@ -7,13 +7,31 @@ type PixelGrid = (number | null)[][];
 /**
  * Optional external asset manifest. If [public/assets/manifest.json] exists,
  * any texture key it lists replaces the procedural version. Use this to drop in
- * CC0 packs (Kenney, OpenGameArt) without touching code.
+ * CC0 packs (Kenney, OpenGameArt) or LibreSprite exports without touching code.
  *
  * Shape:
- *   { "textures": { "fish-goldie": "sprites/goldie.png", ... } }
+ *   {
+ *     "textures": { "fish-goldie-a": "sprites/goldie.png", ... },
+ *     "sheets": {
+ *       "goldie": {
+ *         "image": "sprites/goldie.png",
+ *         "json":  "sprites/goldie.json",
+ *         "frames": { "fish-goldie-a": "goldie 0.aseprite", "fish-goldie-b": "goldie 1.aseprite" }
+ *       }
+ *     }
+ *   }
+ *
+ * `sheets` loads a LibreSprite/Aseprite-exported spritesheet (PNG + JSON hash)
+ * as a Phaser atlas, then aliases each atlas frame to an engine texture key.
  */
+interface AssetSheet {
+  image: string;
+  json: string;
+  frames: Record<string, string>;
+}
 interface AssetManifest {
   textures?: Record<string, string>;
+  sheets?: Record<string, AssetSheet>;
 }
 
 export class PreloadScene extends Phaser.Scene {
@@ -44,17 +62,45 @@ export class PreloadScene extends Phaser.Scene {
 
   private loadManifestOverrides(done: () => void): void {
     const overrides = this.manifest?.textures ?? {};
-    const entries = Object.entries(overrides);
-    if (entries.length === 0) {
+    const sheets = this.manifest?.sheets ?? {};
+    const textureEntries = Object.entries(overrides);
+    const sheetEntries = Object.entries(sheets);
+    if (textureEntries.length === 0 && sheetEntries.length === 0) {
       done();
       return;
     }
-    for (const [key, path] of entries) {
+    for (const [key, path] of textureEntries) {
       this.textures.remove(key);
       this.load.image(key, `assets/${path}`);
     }
-    this.load.once(Phaser.Loader.Events.COMPLETE, done);
+    for (const [id, sheet] of sheetEntries) {
+      this.load.atlas(`__sheet_${id}`, `assets/${sheet.image}`, `assets/${sheet.json}`);
+    }
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      this.aliasSheetFrames(sheetEntries);
+      done();
+    });
     this.load.start();
+  }
+
+  private aliasSheetFrames(sheetEntries: [string, AssetSheet][]): void {
+    for (const [id, sheet] of sheetEntries) {
+      const atlasKey = `__sheet_${id}`;
+      const atlas = this.textures.get(atlasKey);
+      if (!atlas) continue;
+      for (const [textureKey, frameName] of Object.entries(sheet.frames)) {
+        const frame = atlas.has(frameName) ? atlas.get(frameName) : undefined;
+        if (!frame) {
+          console.warn(`[assets] sheet "${id}" has no frame "${frameName}"`);
+          continue;
+        }
+        this.textures.remove(textureKey);
+        const canvas = this.textures.createCanvas(textureKey, frame.width, frame.height);
+        if (!canvas) continue;
+        canvas.drawFrame(atlasKey, frameName, 0, 0);
+        canvas.refresh();
+      }
+    }
   }
 
   private drawLoadingBar(): void {
