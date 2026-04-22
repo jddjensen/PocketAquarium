@@ -9,7 +9,6 @@ import {
   ISO_TILE_H,
   ISO_TILE_W,
   PALETTE,
-  WAREHOUSE,
 } from '../constants';
 import { Grid } from '../world/Grid';
 import { Tank } from '../entities/Tank';
@@ -104,11 +103,9 @@ export class ParkScene extends Phaser.Scene {
   }
 
   /**
-   * Iso backdrop. Floor tiles are drawn first (low depth), then walls painted
-   * back-to-front by `col + row` so taller wall sprites correctly occlude
-   * anything behind them. Only back walls (north + west perimeter) are drawn —
-   * the south/east sides remain blocking for placement but render as floor so
-   * the player can see into the building.
+   * Outdoor-park backdrop. Every grid cell is grass; the gate tile (DOOR) and
+   * spawn tile (ENTRANCE) get a sand-path overlay so the entry point reads
+   * clearly. Depth is only meaningful here when objects get layered on top.
    */
   private drawBackdrop(): void {
     for (let r = 0; r < GRID_ROWS; r++) {
@@ -116,29 +113,21 @@ export class ParkScene extends Phaser.Scene {
         const tile = this.grid.get(c, r);
         if (!tile) continue;
         const { x, y } = Grid.tileToWorld(c, r);
-        const isBackWall = tile.kind === 'wall' && this.isBackWall(c, r);
-        const isBackDoor = tile.kind === 'door' && this.isBackWall(c, r);
+        this.add
+          .image(x, y, 'tile-grass')
+          .setOrigin(0.5, 0.5)
+          .setDepth(Grid.tileDepth(c, r) - 1000);
 
-        // Always lay a ground tile under everything for clean seams.
-        const groundKey =
-          tile.kind === 'exterior'
-            ? 'tile-grass'
-            : tile.kind === 'wall' || tile.kind === 'door' || tile.kind === 'floor'
-              ? 'tile-floor'
-              : 'tile-floor';
-        this.add.image(x, y, groundKey).setOrigin(0.5, 0.5).setDepth(Grid.tileDepth(c, r) - 1000);
-
-        if (isBackWall || isBackDoor) {
-          const key = isBackDoor ? 'tile-door' : 'tile-wall';
+        if (tile.kind === 'door') {
           this.add
-            .image(x, y + ISO_TILE_H / 2, key)
-            .setOrigin(0.5, 1)
-            .setDepth(Grid.tileDepth(c, r));
+            .image(x, y, 'tile-path')
+            .setOrigin(0.5, 0.5)
+            .setDepth(Grid.tileDepth(c, r) - 900);
         }
       }
     }
 
-    // Welcome path marker on the iso grass just outside the door.
+    // Welcome path marker on the spawn tile so players see where guests enter.
     const spawnWorld = Grid.tileToWorld(ENTRANCE.col, ENTRANCE.row);
     this.add
       .polygon(
@@ -150,11 +139,6 @@ export class ParkScene extends Phaser.Scene {
       )
       .setOrigin(0, 0)
       .setDepth(Grid.tileDepth(ENTRANCE.col, ENTRANCE.row) - 500);
-  }
-
-  /** A warehouse perimeter cell is a "back" wall if it's on the north or west side. */
-  private isBackWall(col: number, row: number): boolean {
-    return col === WAREHOUSE.col || row === WAREHOUSE.row;
   }
 
   /**

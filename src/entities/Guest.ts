@@ -31,11 +31,13 @@ export class Guest {
   ) {
     const start = path[0] ?? { col: 0, row: 0 };
     const { x, y } = Grid.tileToWorld(start.col, start.row);
-    // Guest sprites are 8×10 — anchor bottom-center so feet align with the tile
-    // diamond's center bottom edge.
+    // Guest sprites are 8×10 procedural — scaled 2× to read as a character on
+    // 32×16 iso tiles. Anchor bottom-center so feet align with the tile's
+    // bottom point.
     this.sprite = scene.add
       .image(x, y + ISO_TILE_H / 2, 'guest-down-0')
       .setOrigin(0.5, 1)
+      .setScale(2)
       .setDepth(Grid.tileDepth(start.col, start.row));
   }
 

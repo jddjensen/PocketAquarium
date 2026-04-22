@@ -6,10 +6,9 @@ import {
   ISO_ORIGIN_Y,
   ISO_TILE_H,
   ISO_TILE_W,
-  WAREHOUSE,
 } from '../constants';
 
-export type TileKind = 'exterior' | 'wall' | 'door' | 'floor' | 'path' | 'tank' | 'decor';
+export type TileKind = 'door' | 'floor' | 'path' | 'tank' | 'decor';
 
 export interface Tile {
   kind: TileKind;
@@ -24,23 +23,20 @@ export class Grid {
     readonly rows: number = GRID_ROWS,
   ) {
     this.tiles = Array.from({ length: rows }, () =>
-      Array.from({ length: cols }, (): Tile => ({ kind: 'exterior' })),
+      Array.from({ length: cols }, (): Tile => ({ kind: 'floor' })),
     );
     this.applyWarehouseLayout();
   }
 
-  /** Stamp walls, door, and interior floor. Safe to call repeatedly on hydrate. */
+  /**
+   * Reset the whole grid to buildable grass with the park gate stamped at the
+   * south edge. Called on hydrate so placements are re-applied from authority
+   * (save state) cleanly.
+   */
   applyWarehouseLayout(): void {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        this.tiles[r]![c] = { kind: 'exterior' };
-      }
-    }
-    const { col: wc, row: wr, w, h } = WAREHOUSE;
-    for (let r = wr; r < wr + h; r++) {
-      for (let c = wc; c < wc + w; c++) {
-        const onPerimeter = r === wr || r === wr + h - 1 || c === wc || c === wc + w - 1;
-        this.tiles[r]![c] = { kind: onPerimeter ? 'wall' : 'floor' };
+        this.tiles[r]![c] = { kind: 'floor' };
       }
     }
     this.tiles[DOOR.row]![DOOR.col] = { kind: 'door' };
