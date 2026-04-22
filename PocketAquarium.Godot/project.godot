@@ -23,8 +23,8 @@ config/icon="res://assets/sprites/tree.png"
 
 [autoload]
 
-GameState="*res://scripts/systems/GameStateAutoload.cs"
-SpriteRegistry="*res://scripts/systems/SpriteRegistry.cs"
+GameState="*res://scenes/GameState.tscn"
+SpriteRegistry="*res://scenes/SpriteRegistry.tscn"
 
 [display]
 
