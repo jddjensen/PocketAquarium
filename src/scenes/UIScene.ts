@@ -192,6 +192,9 @@ export class UIScene extends Phaser.Scene {
       .text(4, barY - 10, '', { ...FONT, color: UI_TEXT_PRIMARY })
       .setVisible(false);
 
+    // Bottom bar now a short shortcut row. The detailed placeable catalog lives
+    // in the BUILD grid panel — pills here are just the ever-present shortcuts
+    // for clearing the tool, opening the catalog, and erasing.
     const tools: {
       label: string;
       tool: BuildTool;
@@ -199,19 +202,11 @@ export class UIScene extends Phaser.Scene {
       onClick?: () => void;
     }[] = [
       { label: 'none', tool: { kind: 'none' }, stripe: PALETTE.stone },
-      { label: 'path', tool: { kind: 'path' }, stripe: PALETTE.sand },
-      { label: '2x2', tool: { kind: 'tank', size: { w: 2, h: 2 } }, stripe: PALETTE.grass },
-      { label: '3x2', tool: { kind: 'tank', size: { w: 3, h: 2 } }, stripe: PALETTE.grass },
-      { label: '4x2', tool: { kind: 'tank', size: { w: 4, h: 2 } }, stripe: PALETTE.grass },
-      { label: '3x3', tool: { kind: 'tank', size: { w: 3, h: 3 } }, stripe: PALETTE.grass },
-      // Decor is a category — pill opens a picker panel rather than setting a
-      // tool directly. The tool field below is a sentinel used only for
-      // active-state highlighting when ANY decor kind is selected.
       {
-        label: 'decor',
-        tool: { kind: 'decor', decor: 'plant' },
-        stripe: PALETTE.plant,
-        onClick: () => this.toggleDecorPanel(),
+        label: 'build',
+        tool: { kind: 'path' }, // sentinel — active highlight covers path/tank/decor
+        stripe: PALETTE.grass,
+        onClick: () => this.toggleBuildPanel(),
       },
       { label: 'erase', tool: { kind: 'erase' }, stripe: PALETTE.uiAccent },
     ];
@@ -243,13 +238,16 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Treat path/tank/decor/fish as one logical "build" category for the pill
+   * highlight in the bottom bar. The user can see they've got a placeable
+   * selected even though the specific variant lives in the popup.
+   */
   private toolsEqual(a: BuildTool, b: BuildTool): boolean {
+    const isBuildCategory = (t: BuildTool) =>
+      t.kind === 'path' || t.kind === 'tank' || t.kind === 'decor' || t.kind === 'fish';
+    if (isBuildCategory(a) && isBuildCategory(b)) return true;
     if (a.kind !== b.kind) return false;
-    if (a.kind === 'tank' && b.kind === 'tank') return a.size.w === b.size.w && a.size.h === b.size.h;
-    // Decor pills are a category — any 'decor' active state highlights the
-    // pill, regardless of which specific decor kind is selected.
-    if (a.kind === 'decor' && b.kind === 'decor') return true;
-    if (a.kind === 'fish' && b.kind === 'fish') return a.speciesId === b.speciesId;
     return true;
   }
 
@@ -355,11 +353,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * Decor picker — cream card with coral header, lists every decor type from
-   * DECOR_CATALOG with cost and appeal. Clicking an entry sets it as the
-   * active build tool and closes the panel.
+   * Unified BUILD MENU — cream card with coral header and a 5-column grid of
+   * sprite-thumbnail cards covering every placeable: paths, habitat sizes,
+   * and the full decor catalog. Matches the reference "Build Menu" panel
+   * layout. Clicking a card sets the tool and closes the panel.
    */
-  private toggleDecorPanel(): void {
+  private toggleBuildPanel(): void {
     this.decorPanelOpen = !this.decorPanelOpen;
     if (this.decorPanel) {
       this.decorPanel.destroy();
@@ -368,9 +367,9 @@ export class UIScene extends Phaser.Scene {
     if (!this.decorPanelOpen) return;
 
     const panel = this.add.container(0, 0);
-    const panelX = 30;
+    const panelX = 24;
     const panelY = TOP_BAR_H + 4;
-    const panelW = GAME_WIDTH - 60;
+    const panelW = GAME_WIDTH - 48;
     const panelH = GAME_HEIGHT - TOP_BAR_H - BOTTOM_BAR_H - 8;
 
     panel.add(
@@ -388,35 +387,84 @@ export class UIScene extends Phaser.Scene {
       this.add.rectangle(panelX, panelY, panelW, 9, PALETTE.uiAccent, 1).setOrigin(0, 0),
     );
     panel.add(
-      this.add.text(panelX + 4, panelY + 1, 'DECOR', { ...FONT, color: '#ffffff' }),
-    );
-    panel.add(
-      this.add.text(panelX + 40, panelY + 1, 'click to select, then click the park', {
-        ...FONT,
-        color: '#ffffff',
-      }),
+      this.add.text(panelX + 4, panelY + 1, 'BUILD MENU', { ...FONT, color: '#ffffff' }),
     );
 
-    let row = 0;
-    for (const spec of ALL_DECOR) {
-      const y = panelY + 12 + row * 11;
-      const label = `${spec.label}  $${spec.cost}  ★${spec.appeal}`;
-      const text = this.add.text(panelX + 4, y, label, { ...FONT, color: UI_TEXT_PRIMARY });
-      text.setInteractive({ useHandCursor: true });
-      text.on('pointerdown', () => {
-        gameState.setTool({ kind: 'decor', decor: spec.kind });
-        this.toggleDecorPanel();
-      });
-      panel.add(text);
-      row++;
+    interface BuildItem {
+      texture: string;
+      tool: BuildTool;
+      cost: number;
     }
+    const items: BuildItem[] = [
+      { texture: 'tile-path', tool: { kind: 'path' }, cost: 5 },
+      { texture: 'tank-2x2-a', tool: { kind: 'tank', size: { w: 2, h: 2 } }, cost: 50 * 4 },
+      { texture: 'tank-3x2-a', tool: { kind: 'tank', size: { w: 3, h: 2 } }, cost: 50 * 6 },
+      { texture: 'tank-4x2-a', tool: { kind: 'tank', size: { w: 4, h: 2 } }, cost: 50 * 8 },
+      { texture: 'tank-3x3-a', tool: { kind: 'tank', size: { w: 3, h: 3 } }, cost: 50 * 9 },
+      ...ALL_DECOR.map((spec) => ({
+        texture: `decor-${spec.kind}`,
+        tool: { kind: 'decor' as const, decor: spec.kind },
+        cost: spec.cost,
+      })),
+    ];
+
+    const cols = 5;
+    const cardW = 30;
+    const cardH = 38;
+    const gridX = panelX + Math.floor((panelW - cols * cardW - (cols - 1) * 3) / 2);
+    const gridY = panelY + 14;
+
+    items.forEach((item, idx) => {
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      const cx = gridX + col * (cardW + 3);
+      const cy = gridY + row * (cardH + 3);
+
+      panel.add(
+        this.add
+          .rectangle(cx, cy, cardW, cardH, PALETTE.uiBg, 1)
+          .setOrigin(0, 0)
+          .setStrokeStyle(1, PALETTE.grassShade),
+      );
+      // Thumbnail area — sprite fits into 24×24 preserving aspect ratio.
+      const thumb = this.add.image(cx + cardW / 2, cy + 2 + 12, item.texture).setOrigin(0.5, 0.5);
+      const maxDim = 24;
+      const scale = Math.min(maxDim / thumb.width, maxDim / thumb.height, 2);
+      thumb.setScale(scale);
+      panel.add(thumb);
+      panel.add(
+        this.add.text(cx + 2, cy + cardH - 9, `$${item.cost}`, {
+          ...FONT,
+          color: UI_TEXT_GOLD,
+        }),
+      );
+
+      const hit = this.add
+        .rectangle(cx, cy, cardW, cardH, 0xffffff, 0.0001)
+        .setOrigin(0, 0)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerdown', () => {
+        gameState.setTool(item.tool);
+        this.toggleBuildPanel();
+      });
+      panel.add(hit);
+    });
+
+    panel.add(
+      this.add.text(
+        panelX + 4,
+        panelY + panelH - 10,
+        'place structures, paths, and decorations',
+        { ...FONT, color: UI_TEXT_MUTED },
+      ),
+    );
 
     const close = this.add.text(panelX + panelW - 24, panelY + 1, '[close]', {
       ...FONT,
       color: '#ffffff',
     });
     close.setInteractive({ useHandCursor: true });
-    close.on('pointerdown', () => this.toggleDecorPanel());
+    close.on('pointerdown', () => this.toggleBuildPanel());
     panel.add(close);
 
     this.decorPanel = panel;
