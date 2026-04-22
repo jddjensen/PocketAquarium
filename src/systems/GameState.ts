@@ -1,4 +1,5 @@
 import type { TileKind } from '../world/Grid';
+import type { DecorKind } from '../data/decor';
 import {
   DEFAULT_TICKET_PRICE,
   MAX_TICKET_PRICE,
@@ -21,7 +22,7 @@ export interface PlacedDecor {
   id: string;
   col: number;
   row: number;
-  kind: 'plant' | 'rock';
+  kind: DecorKind;
 }
 
 export interface PlacedPath {
@@ -54,7 +55,7 @@ export type BuildTool =
   | { kind: 'none' }
   | { kind: 'path' }
   | { kind: 'tank'; size: { w: number; h: number } }
-  | { kind: 'decor'; decor: 'plant' | 'rock' }
+  | { kind: 'decor'; decor: DecorKind }
   | { kind: 'fish'; speciesId: string }
   | { kind: 'erase' };
 

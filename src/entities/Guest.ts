@@ -31,13 +31,11 @@ export class Guest {
   ) {
     const start = path[0] ?? { col: 0, row: 0 };
     const { x, y } = Grid.tileToWorld(start.col, start.row);
-    // Guest sprites are 8×10 procedural — scaled 2× to read as a character on
-    // 32×16 iso tiles. Anchor bottom-center so feet align with the tile's
-    // bottom point.
+    // PixelLab guest sprite is 24×24 authored at on-screen size — no scaling.
+    // Anchor bottom-center so feet align with the tile's bottom vertex.
     this.sprite = scene.add
       .image(x, y + ISO_TILE_H / 2, 'guest-down-0')
       .setOrigin(0.5, 1)
-      .setScale(2)
       .setDepth(Grid.tileDepth(start.col, start.row));
   }
 
@@ -110,7 +108,6 @@ export class Guest {
       this.facing = nextFacing;
       this.applyTexture();
     }
-    this.sprite.setFlipX(this.facing === 'right');
   }
 
   private setFrame(frame: 0 | 1): void {
@@ -120,9 +117,12 @@ export class Guest {
   }
 
   private applyTexture(): void {
-    const textureDir = this.facing === 'right' ? 'left' : this.facing;
-    this.sprite.setTexture(`guest-${textureDir}-${this.walkFrame}`);
-    this.sprite.setFlipX(this.facing === 'right');
+    // Every facing has its own texture now (PixelLab-sourced 4-direction
+    // atlas). No more flipX trick — the east-facing sprite is authored
+    // correctly and flipping it would reverse asymmetric detail like a
+    // shoulder bag or handedness.
+    this.sprite.setTexture(`guest-${this.facing}-${this.walkFrame}`);
+    this.sprite.setFlipX(false);
   }
 
   private checkForTankView(col: number, row: number): void {

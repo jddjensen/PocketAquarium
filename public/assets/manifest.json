@@ -1,6 +1,18 @@
 {
   "textures": {
-    "tile-grass": "sprites/grass-tile.png"
+    "tile-grass": "sprites/grass-tile.png",
+    "decor-tree": "sprites/tree.png",
+    "decor-bench": "sprites/bench.png",
+    "decor-flowerbed": "sprites/flowerbed.png",
+    "decor-fountain": "sprites/fountain.png",
+    "guest-down-0": "sprites/guest-down-0.png",
+    "guest-down-1": "sprites/guest-down-1.png",
+    "guest-up-0": "sprites/guest-up-0.png",
+    "guest-up-1": "sprites/guest-up-1.png",
+    "guest-left-0": "sprites/guest-left-0.png",
+    "guest-left-1": "sprites/guest-left-1.png",
+    "guest-right-0": "sprites/guest-right-0.png",
+    "guest-right-1": "sprites/guest-right-1.png"
   },
   "sheets": {}
 }

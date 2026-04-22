@@ -131,11 +131,23 @@ export class PreloadScene extends Phaser.Scene {
     }
     this.drawGrid('decor-plant', this.plantGrid());
     this.drawGrid('decor-rock', this.rockGrid());
+    // Procedural fallbacks for PixelLab-sourced decor kinds. When the manifest
+    // is present these get replaced; without it the game still renders
+    // something rather than crashing on a missing texture key.
+    this.drawGrid('decor-tree', this.plantGrid());
+    this.drawGrid('decor-bench', this.rockGrid());
+    this.drawGrid('decor-flowerbed', this.plantGrid());
+    this.drawGrid('decor-fountain', this.rockGrid());
 
     for (const dir of ['down', 'up', 'left'] as const) {
       this.drawGrid(`guest-${dir}-0`, this.guestGrid(dir, 0));
       this.drawGrid(`guest-${dir}-1`, this.guestGrid(dir, 1));
     }
+    // Right-facing fallback reuses the left grid; PixelLab override provides
+    // a proper east-facing sprite. Without it, procedural right-facers look
+    // identical to left-facers (readable at the scale of the game).
+    this.drawGrid('guest-right-0', this.guestGrid('left', 0));
+    this.drawGrid('guest-right-1', this.guestGrid('left', 1));
 
     this.drawGrid('tile-path', this.isoDiamondTile(PALETTE.path, PALETTE.sandShadow, 0xfcd97b));
     this.drawGrid('tile-floor', this.isoDiamondTile(PALETTE.floor, PALETTE.sandShadow, null));

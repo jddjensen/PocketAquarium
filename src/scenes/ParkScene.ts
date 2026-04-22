@@ -16,11 +16,10 @@ import { Decor } from '../entities/Decor';
 import { Guest } from '../entities/Guest';
 import { gameState, type BuildTool } from '../systems/GameState';
 import { SPECIES, speciesUnlockedAt } from '../data/species';
+import { DECOR_CATALOG } from '../data/decor';
 
 const TANK_BASE_COST = 50;
 const PATH_COST = 5;
-const DECOR_PLANT_COST = 15;
-const DECOR_ROCK_COST = 10;
 const SAVE_INTERVAL_MS = 5000;
 
 /**
@@ -31,7 +30,7 @@ const SAVE_INTERVAL_MS = 5000;
  */
 const WILLINGNESS_BASE = 3;
 const APPEAL_WEIGHT = 0.5;
-const CROWD_SOCIAL_BONUS = 2;
+const CROWD_SOCIAL_BONUS = 3;
 const CROWD_PENALTY_SLOPE = 5;
 
 
@@ -44,6 +43,7 @@ export class ParkScene extends Phaser.Scene {
   private guests: Guest[] = [];
   private guestSpawnTimer = 0;
   private saveTimer = 0;
+  private hoveredTank: Tank | null = null;
   private unsubscribe?: () => void;
 
   constructor() {
@@ -87,11 +87,10 @@ export class ParkScene extends Phaser.Scene {
       const demand = this.demand();
       if (demand > 0) {
         this.trySpawnGuest();
-        // Higher demand → faster arrivals; floor at 1.2s between spawns.
-        this.guestSpawnTimer = Math.max(1.2, 7 - demand * 0.4);
+        // Denser park vibe: faster baseline spawns, floor at 0.5s.
+        this.guestSpawnTimer = Math.max(0.5, 4 - demand * 0.3);
       } else {
-        // Price too high for what the park offers — check again soon.
-        this.guestSpawnTimer = 2.5;
+        this.guestSpawnTimer = 1.5;
       }
     }
 
@@ -113,16 +112,16 @@ export class ParkScene extends Phaser.Scene {
         const tile = this.grid.get(c, r);
         if (!tile) continue;
         const { x, y } = Grid.tileToWorld(c, r);
-        this.add
+        const grass = this.add
           .image(x, y, 'tile-grass')
-          .setOrigin(0.5, 0.5)
           .setDepth(Grid.tileDepth(c, r) - 1000);
+        this.anchorIsoTile(grass);
 
         if (tile.kind === 'door') {
-          this.add
+          const door = this.add
             .image(x, y, 'tile-path')
-            .setOrigin(0.5, 0.5)
             .setDepth(Grid.tileDepth(c, r) - 900);
+          this.anchorIsoTile(door);
         }
       }
     }
@@ -139,6 +138,21 @@ export class ParkScene extends Phaser.Scene {
       )
       .setOrigin(0, 0)
       .setDepth(Grid.tileDepth(ENTRANCE.col, ENTRANCE.row) - 500);
+  }
+
+  /**
+   * Anchor an iso ground-tile image so its diamond face sits at the iso
+   * projection center, regardless of whether the texture is a flat 32×16
+   * rhombus or a 32×N thick-block (diamond top + side face hanging below).
+   *
+   * Convention: the diamond face occupies the top ISO_TILE_H pixels of the
+   * texture, so the diamond center is at y = ISO_TILE_H / 2. Origin Y =
+   * (ISO_TILE_H / 2) / textureHeight puts the pivot there.
+   */
+  private anchorIsoTile(img: Phaser.GameObjects.Image): void {
+    const h = img.height;
+    const originY = h <= ISO_TILE_H ? 0.5 : ISO_TILE_H / 2 / h;
+    img.setOrigin(0.5, originY);
   }
 
   /**
@@ -175,8 +189,8 @@ export class ParkScene extends Phaser.Scene {
       const { x, y } = Grid.tileToWorld(p.col, p.row);
       const tile = this.add
         .image(x, y, 'tile-path')
-        .setOrigin(0.5, 0.5)
         .setDepth(Grid.tileDepth(p.col, p.row) - 500);
+      this.anchorIsoTile(tile);
       this.placementLayer.add(tile);
       this.grid.set(p.col, p.row, { kind: 'path' });
     }
@@ -212,8 +226,12 @@ export class ParkScene extends Phaser.Scene {
     const { col, row } = Grid.worldToTile(pointer.worldX, pointer.worldY);
     if (!this.grid.inBounds(col, row)) {
       this.hoverMarker.setVisible(false);
+      this.hoveredTank = null;
       return;
     }
+    // Track habitat under the cursor for the UIScene info card. Lookup is O(n
+    // tanks) per pointermove — fine at n≤10s.
+    this.hoveredTank = this.tanks.find((t) => t.contains(col, row)) ?? null;
     const tool = gameState.snapshot.tool;
     if (tool.kind === 'none') {
       this.hoverMarker.setVisible(false);
@@ -269,8 +287,9 @@ export class ParkScene extends Phaser.Scene {
         gameState.addPath({ col, row });
         return;
       case 'decor': {
-        const cost = tool.decor === 'plant' ? DECOR_PLANT_COST : DECOR_ROCK_COST;
-        if (!gameState.spend(cost)) return;
+        const spec = DECOR_CATALOG[tool.decor];
+        if (!spec) return;
+        if (!gameState.spend(spec.cost)) return;
         gameState.addDecor({ id: crypto.randomUUID(), col, row, kind: tool.decor });
         return;
       }
@@ -312,13 +331,21 @@ export class ParkScene extends Phaser.Scene {
   }
 
   private totalAppeal(): number {
-    return this.tanks.reduce((sum, t) => sum + t.appeal, 0);
+    const tankAppeal = this.tanks.reduce((sum, t) => sum + t.appeal, 0);
+    const decorAppeal = this.decor.reduce((sum, d) => {
+      const spec = DECOR_CATALOG[d.placement.kind];
+      return sum + (spec?.appeal ?? 0);
+    }, 0);
+    return tankAppeal + decorAppeal;
   }
 
   /** Current guest count divided by a size-scaled soft cap. 1.0 = pleasant, >1 = crowded. */
   private crowdFactor(): number {
     const pathCount = gameState.snapshot.paths.length;
-    const softCap = Math.max(3, Math.floor(pathCount / 3));
+    // Decor contributes to apparent park size too — each decor counts as 0.5
+    // path-tile toward the cap so well-decorated parks hold more guests.
+    const decorWeight = gameState.snapshot.decor.length * 0.5;
+    const softCap = Math.max(6, Math.floor((pathCount + decorWeight) / 2));
     return this.guests.length / softCap;
   }
 
@@ -377,5 +404,13 @@ export class ParkScene extends Phaser.Scene {
   // Kept as a read for any UI element that wants to know the canvas size.
   getViewport(): { w: number; h: number } {
     return { w: GAME_WIDTH, h: GAME_HEIGHT };
+  }
+
+  /**
+   * The habitat the cursor is currently over, or null if no pointer is on a
+   * tank tile. Polled by UIScene each frame to drive the right-side info card.
+   */
+  getHoveredTank(): Tank | null {
+    return this.hoveredTank;
   }
 }

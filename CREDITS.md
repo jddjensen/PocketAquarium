@@ -17,8 +17,13 @@ AI-generated sprites (via [PixelLab](https://pixellab.ai/) — paid subscription
 user's own account, generations owned by the user per PixelLab's terms of service):
 
 - **Grass-on-dirt iso tile** — seed 1001, 32×32 thick iso tile. Overrides `tile-grass`.
-- **Stylized park tree** — 48×64 map object, low top-down view. Currently unwired;
-  reserved for the tree decor type added in the decor-variety pass.
+- **Stylized park tree** — 48×64 map object, low top-down view. Overrides `decor-tree`.
+- **Wooden park bench** — 48×32 map object, low top-down view. Overrides `decor-bench`.
+- **Clustered flowerbed** — 32×32 map object, low top-down view. Overrides `decor-flowerbed`.
+- **Stone park fountain** — 48×56 map object, low top-down view. Overrides `decor-fountain`.
+- **Park guest character (ParkGuest)** — 24×24, humanoid chibi, 4 directions,
+  `walking-4-frames` template animation. Frame 0 and frame 2 of each direction
+  wired to `guest-{down,up,left,right}-{0,1}`.
 
 When you drop in external sprite packs via [public/assets/manifest.json](public/assets/manifest.json),
 add an entry here with the pack name, author, and license.
