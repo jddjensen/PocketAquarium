@@ -4,11 +4,15 @@ import type { PlacedTank } from '../systems/GameState';
 import { Fish, type TankBounds } from './Fish';
 import { SPECIES, type Species } from '../data/species';
 
+const RIPPLE_FRAME_MS = 600;
+
 export class Tank {
   readonly id: string;
   private readonly frame: Phaser.GameObjects.Image;
   private readonly fish: Fish[] = [];
   private readonly bounds: TankBounds;
+  private rippleTimer = 0;
+  private rippleToggle: 'a' | 'b' = 'a';
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -21,7 +25,7 @@ export class Tank {
     const pw = placement.w * TILE_SIZE;
     const ph = placement.h * TILE_SIZE;
 
-    this.frame = scene.add.image(px + pw / 2, py + ph / 2, `tank-${placement.w}x${placement.h}`);
+    this.frame = scene.add.image(px + pw / 2, py + ph / 2, `tank-${placement.w}x${placement.h}-a`);
     this.bounds = { left: px + 2, right: px + pw - 2, top: py + 2, bottom: py + ph - 2 };
 
     for (const speciesId of placement.fishSpeciesIds) {
@@ -71,6 +75,13 @@ export class Tank {
 
   update(dt: number): void {
     for (const fish of this.fish) fish.update(dt, this.bounds);
+
+    this.rippleTimer += dt * 1000;
+    if (this.rippleTimer >= RIPPLE_FRAME_MS) {
+      this.rippleTimer = 0;
+      this.rippleToggle = this.rippleToggle === 'a' ? 'b' : 'a';
+      this.frame.setTexture(`tank-${this.placement.w}x${this.placement.h}-${this.rippleToggle}`);
+    }
   }
 
   destroy(): void {

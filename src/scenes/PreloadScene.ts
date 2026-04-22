@@ -1,22 +1,60 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, PALETTE, TILE_SIZE } from '../constants';
-import { ALL_SPECIES } from '../data/species';
+import { ALL_SPECIES, type SpeciesPalette } from '../data/species';
 
 type PixelGrid = (number | null)[][];
 
+/**
+ * Optional external asset manifest. If [public/assets/manifest.json] exists,
+ * any texture key it lists replaces the procedural version. Use this to drop in
+ * CC0 packs (Kenney, OpenGameArt) without touching code.
+ *
+ * Shape:
+ *   { "textures": { "fish-goldie": "sprites/goldie.png", ... } }
+ */
+interface AssetManifest {
+  textures?: Record<string, string>;
+}
+
 export class PreloadScene extends Phaser.Scene {
+  private manifest: AssetManifest | null = null;
+
   constructor() {
     super({ key: 'PreloadScene' });
   }
 
   preload(): void {
     this.drawLoadingBar();
+    this.load.json('manifest', 'assets/manifest.json');
+    this.load.on('loaderror', (file: Phaser.Loader.File) => {
+      if (file.key === 'manifest') {
+        // No manifest present — procedural textures will be used for everything.
+      }
+    });
   }
 
   create(): void {
+    this.manifest = (this.cache.json.get('manifest') as AssetManifest) ?? null;
     this.generatePixelTextures();
-    this.scene.start('ParkScene');
-    this.scene.launch('UIScene');
+    this.loadManifestOverrides(() => {
+      this.scene.start('ParkScene');
+      this.scene.launch('UIScene');
+    });
+  }
+
+  private loadManifestOverrides(done: () => void): void {
+    const overrides = this.manifest?.textures ?? {};
+    const entries = Object.entries(overrides);
+    if (entries.length === 0) {
+      done();
+      return;
+    }
+    for (const [key, path] of entries) {
+      this.textures.remove(key);
+      this.load.image(key, `assets/${path}`);
+    }
+    this.load.once(Phaser.Loader.Events.COMPLETE, done);
+    this.load.start();
   }
 
   private drawLoadingBar(): void {
@@ -35,11 +73,17 @@ export class PreloadScene extends Phaser.Scene {
 
   private generatePixelTextures(): void {
     for (const species of ALL_SPECIES) {
-      this.drawGrid(`fish-${species.id}`, this.fishGrid(species.bodyColor, species.finColor, species.size));
+      this.drawGrid(`fish-${species.id}-a`, this.fishGrid(species.palette, species.size, 'a'));
+      this.drawGrid(`fish-${species.id}-b`, this.fishGrid(species.palette, species.size, 'b'));
     }
     this.drawGrid('decor-plant', this.plantGrid());
     this.drawGrid('decor-rock', this.rockGrid());
-    this.drawGrid('guest', this.guestGrid());
+
+    for (const dir of ['down', 'up', 'left'] as const) {
+      this.drawGrid(`guest-${dir}-0`, this.guestGrid(dir, 0));
+      this.drawGrid(`guest-${dir}-1`, this.guestGrid(dir, 1));
+    }
+
     this.drawGrid('tile-path', this.pathTileGrid());
     this.drawGrid('tile-floor', this.floorTileGrid());
 
@@ -51,7 +95,8 @@ export class PreloadScene extends Phaser.Scene {
       [4, 3],
     ];
     for (const [w, h] of tankSizes) {
-      this.drawGrid(`tank-${w}x${h}`, this.tankGrid(w, h));
+      this.drawGrid(`tank-${w}x${h}-a`, this.tankGrid(w, h, 0));
+      this.drawGrid(`tank-${w}x${h}-b`, this.tankGrid(w, h, 1));
     }
   }
 
@@ -74,77 +119,124 @@ export class PreloadScene extends Phaser.Scene {
     g.destroy();
   }
 
-  private fishGrid(body: number, fin: number, size: 'small' | 'medium' | 'large'): PixelGrid {
+  /**
+   * Fish sprite with 3-tone shading (shadow/base/highlight) and a second frame
+   * where the tail is offset by one pixel — creates a swim wiggle when alternated.
+   */
+  private fishGrid(
+    pal: SpeciesPalette,
+    size: 'small' | 'medium' | 'large',
+    frame: 'a' | 'b',
+  ): PixelGrid {
     const _ = null;
+    const S = pal.shadow;
+    const B = pal.base;
+    const H = pal.highlight;
+    const F = pal.fin;
+    const E = pal.eye;
+    const tailDown = frame === 'a';
+
     if (size === 'small') {
-      return [
-        [_, _, _, body, body, body, _, _],
-        [_, body, body, body, body, body, body, _],
-        [fin, body, body, body, body, 0x000000, body, body],
-        [_, body, body, body, body, body, body, _],
-        [_, _, _, body, body, body, _, _],
-      ];
+      return tailDown
+        ? [
+            [_, _, _, _, B, B, B, _, _, _],
+            [_, _, B, B, H, H, B, B, _, _],
+            [F, F, B, H, H, B, B, E, B, _],
+            [F, F, B, S, S, B, B, B, _, _],
+            [_, _, _, _, S, S, _, _, _, _],
+          ]
+        : [
+            [_, _, _, _, S, S, _, _, _, _],
+            [_, _, B, B, H, H, B, B, _, _],
+            [F, F, B, H, H, B, B, E, B, _],
+            [F, F, B, S, S, B, B, B, _, _],
+            [_, _, _, _, B, B, B, _, _, _],
+          ];
     }
+
     if (size === 'medium') {
-      return [
-        [_, _, _, _, body, body, body, body, _, _],
-        [_, _, body, body, body, body, body, body, body, _],
-        [fin, fin, body, body, body, body, body, 0x000000, body, body],
-        [_, _, body, body, body, body, body, body, body, _],
-        [_, _, _, _, body, body, body, body, _, _],
-      ];
+      return tailDown
+        ? [
+            [_, _, _, _, _, B, B, B, B, _, _, _],
+            [_, _, _, B, B, H, H, H, B, B, _, _],
+            [_, F, B, B, H, H, H, B, B, E, B, _],
+            [F, F, B, B, S, S, B, B, B, B, B, _],
+            [_, F, _, _, S, S, S, _, _, _, _, _],
+            [_, _, _, _, _, S, _, _, _, _, _, _],
+          ]
+        : [
+            [_, _, _, _, _, S, _, _, _, _, _, _],
+            [_, F, _, _, S, S, S, _, _, _, _, _],
+            [_, F, B, B, H, H, H, B, B, E, B, _],
+            [F, F, B, B, H, H, B, B, B, B, B, _],
+            [_, _, _, B, B, S, H, H, B, B, _, _],
+            [_, _, _, _, _, B, B, B, B, _, _, _],
+          ];
     }
-    return [
-      [_, _, _, _, _, body, body, body, body, body, _, _],
-      [_, _, _, body, body, body, body, body, body, body, body, _],
-      [_, fin, body, body, body, body, body, body, body, body, body, body],
-      [fin, fin, body, body, body, body, body, body, body, 0x000000, body, body],
-      [_, fin, body, body, body, body, body, body, body, body, body, body],
-      [_, _, _, body, body, body, body, body, body, body, body, _],
-      [_, _, _, _, _, body, body, body, body, body, _, _],
-    ];
+
+    return tailDown
+      ? [
+          [_, _, _, _, _, _, B, B, B, B, B, _, _, _],
+          [_, _, _, _, B, B, H, H, H, H, B, B, _, _],
+          [_, _, F, B, B, H, H, H, H, B, B, B, B, _],
+          [_, F, F, B, H, H, H, H, B, B, B, E, B, B],
+          [F, F, F, B, B, S, S, B, B, B, B, B, B, _],
+          [_, F, F, _, S, S, S, S, _, _, _, _, _, _],
+          [_, _, _, _, _, S, S, _, _, _, _, _, _, _],
+        ]
+      : [
+          [_, _, _, _, _, S, S, _, _, _, _, _, _, _],
+          [_, F, F, _, S, S, S, S, _, _, _, _, _, _],
+          [_, F, F, B, B, H, H, H, B, B, B, B, B, _],
+          [F, F, F, B, H, H, H, H, B, B, B, E, B, B],
+          [_, F, F, B, B, S, H, H, H, B, B, B, B, _],
+          [_, _, _, _, B, B, H, H, H, H, B, B, _, _],
+          [_, _, _, _, _, _, B, B, B, B, B, _, _, _],
+        ];
   }
 
   private plantGrid(): PixelGrid {
     const _ = null;
-    const p = PALETTE.plant;
-    const s = PALETTE.plantShadow;
+    const h = PALETTE.plant;
+    const d = PALETTE.plantShadow;
+    const hl = 0x5fe060;
     return [
-      [_, _, _, p, _, _, p, _, _, _, _, _, _, _, _, _],
-      [_, _, p, p, p, _, p, p, _, _, _, p, _, _, _, _],
-      [_, _, p, p, p, p, p, p, p, _, _, p, p, _, _, _],
-      [_, p, p, s, p, p, s, p, p, p, p, p, p, _, _, _],
-      [_, p, s, s, p, s, s, s, p, p, s, s, p, _, _, _],
-      [_, p, p, s, s, s, s, s, s, s, s, p, p, _, _, _],
-      [_, _, p, p, s, s, s, s, s, s, p, p, _, _, _, _],
-      [_, _, _, p, p, s, s, s, s, p, p, _, _, _, _, _],
-      [_, _, _, _, p, p, s, s, p, p, _, _, _, _, _, _],
-      [_, _, _, _, _, p, p, p, p, _, _, _, _, _, _, _],
-      [_, _, _, _, _, _, p, p, _, _, _, _, _, _, _, _],
-      [_, _, _, _, _, _, p, p, _, _, _, _, _, _, _, _],
-      [_, _, _, _, _, s, p, p, s, _, _, _, _, _, _, _],
-      [_, _, _, _, s, s, s, s, s, s, _, _, _, _, _, _],
-      [_, _, _, s, s, s, s, s, s, s, s, _, _, _, _, _],
+      [_, _, _, h, _, _, h, _, _, _, _, _, _, _, _, _],
+      [_, _, h, h, h, _, h, h, _, _, _, h, _, _, _, _],
+      [_, _, h, hl, h, h, h, h, h, _, _, h, h, _, _, _],
+      [_, h, h, hl, hl, h, h, h, h, h, h, h, h, _, _, _],
+      [_, h, h, hl, h, d, d, d, h, h, d, d, h, _, _, _],
+      [_, h, h, h, d, d, d, d, d, d, d, h, h, _, _, _],
+      [_, _, h, h, d, d, d, d, d, d, h, h, _, _, _, _],
+      [_, _, _, h, h, d, d, d, d, h, h, _, _, _, _, _],
+      [_, _, _, _, h, h, d, d, h, h, _, _, _, _, _, _],
+      [_, _, _, _, _, h, h, h, h, _, _, _, _, _, _, _],
+      [_, _, _, _, _, _, h, h, _, _, _, _, _, _, _, _],
+      [_, _, _, _, _, _, h, h, _, _, _, _, _, _, _, _],
+      [_, _, _, _, _, d, h, h, d, _, _, _, _, _, _, _],
+      [_, _, _, _, d, d, d, d, d, d, _, _, _, _, _, _],
+      [_, _, _, d, d, d, d, d, d, d, d, _, _, _, _, _],
       [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
     ];
   }
 
   private rockGrid(): PixelGrid {
     const _ = null;
-    const r = PALETTE.stone;
+    const hl = 0x7e8ea8;
+    const m = PALETTE.stone;
     const s = PALETTE.stoneShadow;
     return [
       [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
-      [_, _, _, _, _, r, r, r, r, _, _, _, _, _, _, _],
-      [_, _, _, _, r, r, r, r, r, r, _, _, _, _, _, _],
-      [_, _, _, r, r, r, r, r, r, r, r, _, _, _, _, _],
-      [_, _, r, r, r, r, r, r, r, r, r, r, _, _, _, _],
-      [_, r, r, r, r, r, r, r, r, r, r, r, r, _, _, _],
-      [_, r, r, r, r, r, r, s, s, r, r, r, r, _, _, _],
-      [r, r, r, r, r, s, s, s, s, s, r, r, r, r, _, _],
-      [r, r, r, s, s, s, s, s, s, s, s, r, r, r, _, _],
-      [r, r, s, s, s, s, s, s, s, s, s, s, r, r, _, _],
-      [r, s, s, s, s, s, s, s, s, s, s, s, s, r, _, _],
+      [_, _, _, _, _, m, m, m, m, _, _, _, _, _, _, _],
+      [_, _, _, _, m, hl, hl, m, m, m, _, _, _, _, _, _],
+      [_, _, _, m, hl, hl, hl, m, m, m, m, _, _, _, _, _],
+      [_, _, m, m, hl, hl, m, m, m, m, m, m, _, _, _, _],
+      [_, m, hl, m, m, m, m, m, m, m, m, m, m, _, _, _],
+      [_, m, m, m, m, m, m, s, s, m, m, m, m, _, _, _],
+      [m, m, m, m, m, s, s, s, s, s, m, m, m, m, _, _],
+      [m, m, m, s, s, s, s, s, s, s, s, m, m, m, _, _],
+      [m, m, s, s, s, s, s, s, s, s, s, s, m, m, _, _],
+      [m, s, s, s, s, s, s, s, s, s, s, s, s, m, _, _],
       [s, s, s, s, s, s, s, s, s, s, s, s, s, s, _, _],
       [s, s, s, s, s, s, s, s, s, s, s, s, s, s, _, _],
       [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
@@ -153,34 +245,79 @@ export class PreloadScene extends Phaser.Scene {
     ];
   }
 
-  private guestGrid(): PixelGrid {
+  /**
+   * Gen 3-style NPC: 3 directions, 2-frame walk cycle. Left is mirrored at draw
+   * time for "right" — saves a texture. Foot offset creates the bob.
+   */
+  private guestGrid(dir: 'down' | 'up' | 'left', frame: 0 | 1): PixelGrid {
     const _ = null;
     const skin = PALETTE.guestSkin;
+    const skinShade = 0xd38b4a;
     const shirt = PALETTE.fishRed;
+    const shirtShade = 0xb13e53;
     const hair = PALETTE.stoneShadow;
     const pants = PALETTE.waterDeep;
+    const eye = 0x000000;
+
+    const footL = frame === 0 ? pants : _;
+    const footR = frame === 0 ? _ : pants;
+    const footLe = frame === 0 ? _ : pants;
+    const footRe = frame === 0 ? pants : _;
+
+    if (dir === 'down') {
+      return [
+        [_, _, hair, hair, hair, hair, _, _],
+        [_, hair, hair, hair, hair, hair, hair, _],
+        [_, hair, skin, skinShade, skin, hair, _, _],
+        [_, hair, skin, eye, skin, eye, skin, _],
+        [_, _, skin, skin, skinShade, skin, _, _],
+        [_, shirt, shirtShade, shirt, shirt, shirt, shirt, _],
+        [_, shirt, shirt, shirt, shirtShade, shirt, shirt, _],
+        [_, shirt, shirt, _, _, shirt, shirt, _],
+        [_, pants, pants, _, _, pants, pants, _],
+        [_, footL, pants, _, _, pants, footR, _],
+      ];
+    }
+    if (dir === 'up') {
+      return [
+        [_, _, hair, hair, hair, hair, _, _],
+        [_, hair, hair, hair, hair, hair, hair, _],
+        [_, hair, hair, hair, hair, hair, hair, _],
+        [_, hair, hair, hair, hair, hair, hair, _],
+        [_, _, skin, skin, skin, skin, _, _],
+        [_, shirt, shirt, shirtShade, shirt, shirt, shirt, _],
+        [_, shirt, shirt, shirt, shirt, shirt, shirt, _],
+        [_, shirt, shirt, _, _, shirt, shirt, _],
+        [_, pants, pants, _, _, pants, pants, _],
+        [_, footL, pants, _, _, pants, footR, _],
+      ];
+    }
     return [
       [_, _, hair, hair, hair, _, _, _],
-      [_, hair, skin, skin, skin, hair, _, _],
-      [_, hair, skin, 0, skin, 0, _, _],
-      [_, _, skin, skin, skin, _, _, _],
+      [_, hair, hair, hair, hair, hair, _, _],
+      [_, hair, skin, skin, hair, hair, _, _],
+      [_, hair, eye, skin, skin, hair, _, _],
+      [_, _, skin, skin, skin, skin, _, _],
+      [_, shirt, shirt, shirtShade, shirt, shirt, _, _],
       [_, shirt, shirt, shirt, shirt, shirt, _, _],
-      [_, shirt, shirt, shirt, shirt, shirt, _, _],
+      [_, shirt, shirt, _, shirt, shirt, _, _],
       [_, pants, pants, _, pants, pants, _, _],
-      [_, pants, _, _, _, pants, _, _],
+      [_, footLe, pants, _, pants, footRe, _, _],
     ];
   }
 
   private pathTileGrid(): PixelGrid {
     const base = PALETTE.path;
     const dark = PALETTE.sandShadow;
+    const light = 0xfcd97b;
     const grid: PixelGrid = [];
     for (let y = 0; y < TILE_SIZE; y++) {
       const row: (number | null)[] = [];
       for (let x = 0; x < TILE_SIZE; x++) {
         const edge = x === 0 || y === 0 || x === TILE_SIZE - 1 || y === TILE_SIZE - 1;
-        const speck = (x * 7 + y * 13) % 17 === 0;
-        row.push(edge ? dark : speck ? dark : base);
+        const hashLight = (x + y) % 6 === 0;
+        const hashDark = (x * 3 + y * 5) % 19 === 0;
+        row.push(edge ? dark : hashDark ? dark : hashLight ? light : base);
       }
       grid.push(row);
     }
@@ -194,36 +331,53 @@ export class PreloadScene extends Phaser.Scene {
     for (let y = 0; y < TILE_SIZE; y++) {
       const row: (number | null)[] = [];
       for (let x = 0; x < TILE_SIZE; x++) {
-        row.push((x + y) % 5 === 0 ? dark : base);
+        const speck = (x * 7 + y * 11) % 23 === 0;
+        row.push(speck ? dark : base);
       }
       grid.push(row);
     }
     return grid;
   }
 
-  private tankGrid(cols: number, rows: number): PixelGrid {
+  /**
+   * Tank frame with glass highlights in the corners, animated water surface
+   * ripples (frame 0 vs frame 1), and a subtle ambient water gradient.
+   */
+  private tankGrid(cols: number, rows: number, frame: 0 | 1): PixelGrid {
     const w = cols * TILE_SIZE;
     const h = rows * TILE_SIZE;
     const water = PALETTE.waterMid;
+    const waterDeep = PALETTE.waterDeep;
     const waterLight = PALETTE.waterLight;
     const surface = PALETTE.waterSurface;
-    const frame = PALETTE.stoneShadow;
-    const frameLight = PALETTE.stone;
+    const surfaceHi = 0xa8f4fb;
+    const frame1 = PALETTE.stoneShadow;
+    const frame2 = PALETTE.stone;
+    const frame3 = 0x8aa0bf;
     const grid: PixelGrid = [];
     for (let y = 0; y < h; y++) {
       const row: (number | null)[] = [];
       for (let x = 0; x < w; x++) {
-        const onFrame = x <= 1 || y <= 1 || x >= w - 2 || y >= h - 2;
-        if (onFrame) {
-          const lit = x <= 1 || y <= 1;
-          row.push(lit ? frameLight : frame);
+        const onOuter = x === 0 || y === 0 || x === w - 1 || y === h - 1;
+        const onInner = x === 1 || y === 1 || x === w - 2 || y === h - 2;
+        if (onOuter) {
+          row.push(frame1);
+          continue;
+        }
+        if (onInner) {
+          const lit = (x <= 2 && y <= 4) || (y <= 2 && x <= 4);
+          row.push(lit ? frame3 : frame2);
           continue;
         }
         if (y <= 3) {
-          row.push(surface);
+          const rippleOffset = frame === 0 ? 0 : 1;
+          const isHi = (x + rippleOffset) % 5 === 0;
+          row.push(isHi ? surfaceHi : surface);
           continue;
         }
-        row.push((x + y) % 7 === 0 ? waterLight : water);
+        const depth = y / h;
+        const tone = depth > 0.7 ? waterDeep : depth < 0.35 ? waterLight : water;
+        row.push((x * 5 + y * 3) % 29 === 0 ? waterLight : tone);
       }
       grid.push(row);
     }

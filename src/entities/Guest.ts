@@ -4,8 +4,10 @@ import { Grid } from '../world/Grid';
 
 const WALK_SPEED = 18;
 const VIEW_TIME = 2.5;
+const WALK_FRAME_MS = 220;
 
 export type GuestState = 'walking' | 'viewing' | 'leaving';
+type Facing = 'down' | 'up' | 'left' | 'right';
 
 export interface GuestCallbacks {
   onView: (guest: Guest, col: number, row: number) => number;
@@ -18,6 +20,9 @@ export class Guest {
   private state: GuestState = 'walking';
   private viewTimer = 0;
   private satisfaction = 0;
+  private facing: Facing = 'down';
+  private frameTimer = 0;
+  private walkFrame: 0 | 1 = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -26,12 +31,13 @@ export class Guest {
   ) {
     const start = path[0] ?? { col: 0, row: 0 };
     const { x, y } = Grid.tileToWorld(start.col, start.row);
-    this.sprite = scene.add.image(x, y, 'guest');
+    this.sprite = scene.add.image(x, y, 'guest-down-0');
   }
 
   update(dt: number): boolean {
     if (this.state === 'viewing') {
       this.viewTimer -= dt;
+      this.setFrame(0);
       if (this.viewTimer <= 0) this.state = 'walking';
       return true;
     }
@@ -49,18 +55,46 @@ export class Guest {
     const dist = Math.hypot(dx, dy);
     const step = WALK_SPEED * dt;
 
+    this.updateFacing(dx, dy);
+
     if (dist <= step) {
       this.sprite.x = tx;
       this.sprite.y = ty;
       this.pathIdx += 1;
-      this.sprite.setFlipX(dx < 0);
       this.checkForTankView(next.col, next.row);
     } else {
       this.sprite.x += (dx / dist) * step;
       this.sprite.y += (dy / dist) * step;
-      this.sprite.setFlipX(dx < 0);
+    }
+
+    this.frameTimer += dt * 1000;
+    if (this.frameTimer >= WALK_FRAME_MS) {
+      this.frameTimer = 0;
+      this.setFrame(this.walkFrame === 0 ? 1 : 0);
     }
     return true;
+  }
+
+  private updateFacing(dx: number, dy: number): void {
+    const nextFacing: Facing =
+      Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+    if (nextFacing !== this.facing) {
+      this.facing = nextFacing;
+      this.applyTexture();
+    }
+    this.sprite.setFlipX(this.facing === 'right');
+  }
+
+  private setFrame(frame: 0 | 1): void {
+    if (this.walkFrame === frame) return;
+    this.walkFrame = frame;
+    this.applyTexture();
+  }
+
+  private applyTexture(): void {
+    const textureDir = this.facing === 'right' ? 'left' : this.facing;
+    this.sprite.setTexture(`guest-${textureDir}-${this.walkFrame}`);
+    this.sprite.setFlipX(this.facing === 'right');
   }
 
   private checkForTankView(col: number, row: number): void {

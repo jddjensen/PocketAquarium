@@ -28,12 +28,37 @@ guests paying tickets, growing your park).
 - **Internal resolution**: 320×180, scaled up with integer-ratio nearest-neighbor
   (GBA-style). The Phaser canvas runs with `pixelArt: true` and `roundPixels: true`.
 - **Palette**: a 16-ish color palette locked in [src/constants.ts](src/constants.ts)
-  (`PALETTE`). Everything drawn — fish, decor, tanks, UI — must pull from this palette
+  (`PALETTE`). Everything drawn — fish, decor, tanks, UI — pulls from this palette
   so the aesthetic stays coherent.
+- **Per-species palettes**: each `Species` carries a 3-tone palette
+  (shadow / base / highlight) plus a fin and eye color. The sprite generator pulls
+  those exact slots, so adding a new species never touches the rendering code.
+- **Animation**: 2-frame swim cycle per fish (tail wiggle), 2-frame water ripple
+  per tank, 2-frame × 3-direction walk cycle per guest (right is mirrored from
+  left to halve the texture count — GBA-era trick).
 - **Sprites**: hand-authored pixel grids in
   [src/scenes/PreloadScene.ts](src/scenes/PreloadScene.ts), turned into textures
-  via `Graphics.generateTexture()`. Replace any of these with real `.png` sprites
-  at the same dimensions later — just swap the preload call.
+  via `Graphics.generateTexture()`.
+
+### Using external sprite packs (Kenney, OpenGameArt, itch.io)
+
+The preloader reads [public/assets/manifest.json](public/assets/manifest.json)
+at boot. Any texture key listed there replaces the procedural version — drop in
+CC0 pixel-art without touching code:
+
+```json
+{
+  "textures": {
+    "fish-goldie-a": "sprites/goldie.png",
+    "fish-goldie-b": "sprites/goldie2.png",
+    "decor-plant": "sprites/plant.png"
+  }
+}
+```
+
+See [public/assets/README.md](public/assets/README.md) for the full list of
+texture keys and expected dimensions, and [CREDITS.md](CREDITS.md) for
+attribution.
 
 ## Getting started
 
