@@ -1,41 +1,36 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
+# Godot 4 / .NET
+PocketAquarium.Godot/.godot/
+PocketAquarium.Godot/.import/
+PocketAquarium.Godot/bin/
+PocketAquarium.Godot/obj/
+PocketAquarium.Godot/tests/bin/
+PocketAquarium.Godot/tests/obj/
+PocketAquarium.Godot/*.csproj.user
+PocketAquarium.Godot/tests/*.csproj.user
+PocketAquarium.Godot/export_presets.cfg
+PocketAquarium.Godot/mono_crash.*.json
 
-# Build outputs
-dist/
-dist-ssr/
-*.local
+# Exports
+PocketAquarium.Godot/builds/
+*.app
+*.exe
+*.pck
 
-# Editor directories
+# Editor / OS
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+*.swp
+*.swo
+Thumbs.db
 
 # Env files
 .env
 .env.local
 .env.*.local
 
-# Test coverage
-coverage/
-
-# Netlify
-.netlify/
-
-# OS
-Thumbs.db
+# Python (asset pipeline)
+__pycache__/
+*.pyc
+.venv/

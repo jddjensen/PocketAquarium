@@ -1,0 +1,48 @@
+[gd_scene load_steps=2 format=3 uid="uid://b0000000000ui"]
+
+[ext_resource type="Script" path="res://scripts/scenes/UIScene.cs" id="1"]
+
+[node name="UI" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1")
+
+[node name="TopBar" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 12.0
+
+[node name="BottomBar" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -16.0
+
+[node name="HabitatCard" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 250.0
+offset_top = 16.0
+offset_right = 318.0
+offset_bottom = 56.0
+visible = false
+
+[node name="BuildPanel" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 16.0
+offset_right = 296.0
+offset_bottom = 164.0
+visible = false
+
+[node name="CreaturePanel" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 30.0
+offset_top = 16.0
+offset_right = 290.0
+offset_bottom = 164.0
+visible = false

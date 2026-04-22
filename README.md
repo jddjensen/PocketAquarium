@@ -1,136 +1,61 @@
 # Pocket Aquarium
 
-A pixel-art aquarium park sim — somewhere between Pokémon (creature collecting,
-rarity tiers, sprite-driven charm) and RollerCoaster Tycoon (tile-based building,
-guests paying tickets, growing your park).
+A pixel-art isometric park sanctuary sim — build habitats, attract guests, care for creatures. Inspired by safari park tycoon games in style, with the creature-collecting depth of Pokémon.
 
-## How it plays
+> **v2.0 rewrite in progress.** The original web version (Phaser 3 / TypeScript)
+> lives on branch [`archive/web-v1`](../../tree/archive/web-v1). The main branch
+> is a ground-up port to **Godot 4 + C#**, targeting native Mac and Windows
+> builds.
 
-1. **Build paths** from the entrance (highlighted tile bottom-left) into your park.
-2. **Place tanks** on floor tiles — bigger tanks cost more but hold more fish.
-3. **Open the FISH panel** (top-right) to stock a tank. Click a species, then click a tank.
-4. **Guests walk the paths**, stop to admire tanks near the path, pay you tickets, and
-   raise your park's reputation.
-5. **Higher reputation unlocks rarer species** — legendary fish like the _Aurorakoi_
-   only appear once your park is thriving.
-6. Everything auto-saves to `localStorage` every 5 seconds and when the scene closes.
+## Stack
 
-## Tech stack
-
-- **[Phaser 3](https://phaser.io/)** — 2D game engine, pixel-art mode, scenes, input
-- **[Vite](https://vitejs.dev/)** — dev server + bundler
-- **TypeScript** (strict, `exactOptionalPropertyTypes`)
-- **ESLint + Prettier** — lint and format
-- **Vitest** — unit tests
-
-## Art direction
-
-- **Internal resolution**: 320×180, scaled up with integer-ratio nearest-neighbor
-  (GBA-style). The Phaser canvas runs with `pixelArt: true` and `roundPixels: true`.
-- **Palette**: a 16-ish color palette locked in [src/constants.ts](src/constants.ts)
-  (`PALETTE`). Everything drawn — fish, decor, tanks, UI — pulls from this palette
-  so the aesthetic stays coherent.
-- **Per-species palettes**: each `Species` carries a 3-tone palette
-  (shadow / base / highlight) plus a fin and eye color. The sprite generator pulls
-  those exact slots, so adding a new species never touches the rendering code.
-- **Animation**: 2-frame swim cycle per fish (tail wiggle), 2-frame water ripple
-  per tank, 2-frame × 3-direction walk cycle per guest (right is mirrored from
-  left to halve the texture count — GBA-era trick).
-- **Sprites**: hand-authored pixel grids in
-  [src/scenes/PreloadScene.ts](src/scenes/PreloadScene.ts), turned into textures
-  via `Graphics.generateTexture()`.
-
-### Using external sprite packs (Kenney, OpenGameArt, itch.io)
-
-The preloader reads [public/assets/manifest.json](public/assets/manifest.json)
-at boot. Any texture key listed there replaces the procedural version — drop in
-CC0 pixel-art without touching code:
-
-```json
-{
-  "textures": {
-    "fish-goldie-a": "sprites/goldie.png",
-    "fish-goldie-b": "sprites/goldie2.png",
-    "decor-plant": "sprites/plant.png"
-  }
-}
-```
-
-See [public/assets/README.md](public/assets/README.md) for the full list of
-texture keys and expected dimensions, and [CREDITS.md](CREDITS.md) for
-attribution.
+- **Engine:** Godot 4.3 with .NET 8 / C# 12
+- **Tests:** xUnit against pure-C# logic modules (no Godot runtime in CI)
+- **Asset pipeline:** Python + PixelLab-generated sprites
+- **Targets:** macOS `.app`, Windows `.exe`
 
 ## Getting started
 
+See [CLAUDE.md](CLAUDE.md) for the full project layout, build commands, and
+conventions. Quick start:
+
 ```bash
-npm install
-npm run dev
+# Install Godot 4.3 with .NET support from https://godotengine.org/download
+# Install .NET 8 SDK from https://dotnet.microsoft.com/download
+
+cd PocketAquarium.Godot
+dotnet restore
+dotnet test tests/PocketAquarium.Tests.csproj   # run logic tests
+
+# Open the editor
+open -a Godot PocketAquarium.Godot/project.godot    # macOS
 ```
-
-Open <http://localhost:5173>.
-
-## Scripts
-
-| Script              | What it does                              |
-| ------------------- | ----------------------------------------- |
-| `npm run dev`       | Start the Vite dev server with HMR        |
-| `npm run build`     | Type-check and build for production       |
-| `npm run preview`   | Preview the production build locally      |
-| `npm run typecheck` | Run the TypeScript compiler (no emit)     |
-| `npm run lint`      | Run ESLint                                |
-| `npm run format`    | Format `src/` with Prettier               |
-| `npm test`          | Run the Vitest suite                      |
 
 ## Project structure
 
 ```
-src/
-├── main.ts                # Entry point
-├── config.ts              # Phaser game config (pixel-art mode, scenes)
-├── constants.ts           # Game size, tile size, PALETTE (Phaser-free)
-├── style.css
-├── data/
-│   └── species.ts         # Fish species registry (stats, rarity, unlock tiers)
-├── world/
-│   └── Grid.ts            # Tile grid + world/tile coord conversions
-├── systems/
-│   └── GameState.ts       # Money, reputation, placements, save/load, current tool
-├── entities/
-│   ├── Fish.ts            # Fish wander inside a Tank's bounds
-│   ├── Tank.ts            # A placed tank — holds fish, computes appeal
-│   ├── Decor.ts           # Plants and rocks
-│   └── Guest.ts           # NPC that pathfinds on path tiles, admires tanks
-└── scenes/
-    ├── BootScene.ts
-    ├── PreloadScene.ts    # Generates all pixel-art textures
-    ├── ParkScene.ts       # The park: renders tiles, handles build tool clicks
-    └── UIScene.ts         # HUD, build palette, fish collection panel
+PocketAquarium.Godot/       Godot 4 / .NET 8 project
+  scenes/                   .tscn scene files
+  scripts/                  C# source (entities, systems, data, scenes)
+  assets/                   PNG sprites + manifest
+  tests/                    xUnit test project
+
+specs/                      Written specs driving Codex contributions.
+                            See specs/README.md.
+
+CLAUDE.md                   Conventions, build commands, architecture notes.
+CREDITS.md                  Art attribution (PixelLab generations).
 ```
 
-### Scene split
+## Development model
 
-Phaser runs multiple scenes in parallel. `UIScene` runs over `ParkScene` so HUD
-elements aren't affected by the park's world coordinates and can be refreshed
-independently. Same pattern fits future modals, menus, and shops.
+This repository is co-maintained by two AI agents with a clear split:
 
-### Save format
+- **Claude** owns architecture decisions, scene graph, rendering, entity
+  behavior, and UI layout.
+- **Codex** owns pure-data ports, testable systems modules, the asset pipeline,
+  and CI wiring — each task written up in [specs/](specs/) with exact
+  signatures and xUnit tests it must satisfy.
 
-`localStorage` key `pocket-aquarium:save:v1` holds a versioned JSON blob
-(money, reputation, placements, caught species). Bump the version and branch on
-load if the schema changes.
-
-## Deployment
-
-[netlify.toml](netlify.toml) is ready to go — connect the GitHub repo to Netlify
-and it'll auto-build `dist/`. For GitHub Pages or any static host, deploy the
-contents of `dist/` after `npm run build`.
-
-## Roadmap
-
-- Water quality (tanks degrade without filters)
-- Feeding mechanic (drop food, feed happiness)
-- Day/night cycle tinting the palette
-- Fish breeding / trait inheritance
-- Staff (janitors, tank cleaners) — the RCT-style management loop
-- Gacha/gashapon "rare catch" event for legendary fish
-- Audio (chiptune BGM, pellet plop, coin ching)
+If you're contributing: pick a spec, implement against its contract, make
+`dotnet test` pass, open a PR.

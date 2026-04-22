@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>PocketAquarium.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <PackageReference Include="xunit" Version="2.7.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\scripts\systems\IsoGrid.cs" Link="SUT\IsoGrid.cs" />
+    <Compile Include="..\scripts\systems\PathFinder.cs" Link="SUT\PathFinder.cs" />
+    <Compile Include="..\scripts\systems\WillingnessModel.cs" Link="SUT\WillingnessModel.cs" />
+    <Compile Include="..\scripts\systems\SaveService.cs" Link="SUT\SaveService.cs" />
+    <Compile Include="..\scripts\data\Species.cs" Link="SUT\Species.cs" />
+    <Compile Include="..\scripts\data\DecorCatalog.cs" Link="SUT\DecorCatalog.cs" />
+    <Compile Include="..\scripts\data\GameConstants.cs" Link="SUT\GameConstants.cs" />
+  </ItemGroup>
+</Project>
