@@ -1,4 +1,6 @@
 {
-  "textures": {},
+  "textures": {
+    "tile-grass": "sprites/grass-tile.png"
+  },
   "sheets": {}
 }

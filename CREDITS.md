@@ -11,7 +11,14 @@ All original. Design techniques studied from:
 
 ## Art
 
-Currently 100% procedurally generated in [src/scenes/PreloadScene.ts](src/scenes/PreloadScene.ts).
+Procedural fallbacks in [src/scenes/PreloadScene.ts](src/scenes/PreloadScene.ts).
+
+AI-generated sprites (via [PixelLab](https://pixellab.ai/) — paid subscription,
+user's own account, generations owned by the user per PixelLab's terms of service):
+
+- **Grass-on-dirt iso tile** — seed 1001, 32×32 thick iso tile. Overrides `tile-grass`.
+- **Stylized park tree** — 48×64 map object, low top-down view. Currently unwired;
+  reserved for the tree decor type added in the decor-variety pass.
 
 When you drop in external sprite packs via [public/assets/manifest.json](public/assets/manifest.json),
 add an entry here with the pack name, author, and license.

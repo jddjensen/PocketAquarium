@@ -32,13 +32,14 @@ export class Tank {
       .setOrigin(0.5, 0.5)
       .setDepth(Grid.tileDepth(placement.col + placement.w - 1, placement.row + placement.h - 1));
 
-    // Fish swim in the axis-aligned rect inscribed in the rhombus (half the
-    // rhombus's width and height, centered on the tank). This keeps fish motion
-    // simple while visually reading as "inside the pool".
+    // Fish swim inside the water body only — the outer 18% of the rhombus
+     // radius is fence + grass rim, so fish bounds shrink to the inscribed
+     // rect of the (sum ≤ 0.82) sub-rhombus. Empirical factor ≈ 0.41 × full
+     // rhombus dimension.
     const rhombusW = (placement.w + placement.h) * (ISO_TILE_W / 2);
     const rhombusH = (placement.w + placement.h) * (ISO_TILE_H / 2);
-    const innerW = rhombusW / 2;
-    const innerH = rhombusH / 2;
+    const innerW = rhombusW * 0.41;
+    const innerH = rhombusH * 0.41;
     this.bounds = {
       left: center.x - innerW / 2 + 2,
       right: center.x + innerW / 2 - 2,

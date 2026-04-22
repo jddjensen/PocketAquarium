@@ -498,10 +498,11 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   /**
-   * Iso tank pool for an N×M tile footprint. Renders as a rhombus with a dark
-   * rim, two-tone water, and a brighter surface band near the back edges. The
-   * ripple `frame` parameter shifts the highlight pattern each beat for the
-   * animated water surface.
+   * Iso fenced habitat for an N×M tile footprint:
+   *   - Wooden fence perimeter (dark posts + lighter rail highlight)
+   *   - Inner grass margin so the water reads as a contained pond, not a tile
+   *   - Water pool interior with ripple sparkle (frame 0/1 shifts the highlights)
+   * Read from outside-in: outer fence → grass rim → water body.
    */
   private isoTankGrid(cols: number, rows: number, frame: 0 | 1): PixelGrid {
     const w = (cols + rows) * (ISO_TILE_W / 2);
@@ -510,9 +511,12 @@ export class PreloadScene extends Phaser.Scene {
     const waterDeep = PALETTE.waterDeep;
     const waterLight = PALETTE.waterLight;
     const surface = PALETTE.waterSurface;
-    const surfaceHi = 0xa8f4fb;
-    const rim = PALETTE.stoneShadow;
-    const rimLit = PALETTE.stone;
+    const surfaceHi = 0xbfe7ff;
+    const fencePost = PALETTE.doorWoodShade;
+    const fenceRail = PALETTE.doorWood;
+    const fenceRailHi = PALETTE.doorWoodHighlight;
+    const grassRim = PALETTE.grass;
+    const grassRimShade = PALETTE.grassShade;
     const grid: PixelGrid = [];
     const cx = w / 2;
     const cy = h / 2;
@@ -526,14 +530,29 @@ export class PreloadScene extends Phaser.Scene {
           row.push(null);
           continue;
         }
-        if (sum > 0.9) {
-          // outer rim — brighter on the back (upper) edges
+        // Outermost band: wooden fence. Back edges (upper half of rhombus) get
+        // the lit rail tone; front edges darker so the eye reads "behind" vs
+        // "in front of" the pool.
+        if (sum > 0.92) {
           const back = y < cy;
-          row.push(back ? rimLit : rim);
+          // Periodic fence posts — small dark stems along the rail.
+          const along = x + y;
+          const postTick = along % 6 === 0;
+          if (postTick) {
+            row.push(fencePost);
+            continue;
+          }
+          row.push(back ? fenceRailHi : fenceRail);
           continue;
         }
-        // Water interior: depth from top→bottom, ripple sparkle near top.
-        const nearTop = y < cy - (cy * 0.5);
+        // Grass rim — thin margin between fence and water.
+        if (sum > 0.82) {
+          const speckle = (x * 3 + y * 7) % 11 === 0;
+          row.push(speckle ? grassRimShade : grassRim);
+          continue;
+        }
+        // Water interior: depth from top→bottom, ripple sparkle near the back.
+        const nearTop = y < cy - cy * 0.4;
         if (nearTop) {
           const rippleOffset = frame === 0 ? 0 : 1;
           const isHi = (x + rippleOffset) % 5 === 0;
@@ -541,7 +560,7 @@ export class PreloadScene extends Phaser.Scene {
           continue;
         }
         const depth = y / h;
-        const tone = depth > 0.7 ? waterDeep : depth < 0.4 ? waterLight : water;
+        const tone = depth > 0.75 ? waterDeep : depth < 0.45 ? waterLight : water;
         row.push((x * 5 + y * 3) % 29 === 0 ? waterLight : tone);
       }
       grid.push(row);
