@@ -1,6 +1,12 @@
 import type { TileKind } from '../world/Grid';
+import {
+  DEFAULT_TICKET_PRICE,
+  MAX_TICKET_PRICE,
+  MIN_TICKET_PRICE,
+} from '../constants';
 
-const SAVE_KEY = 'pocket-aquarium:save:v1';
+const SAVE_KEY = 'pocket-aquarium:save:v2';
+const LEGACY_SAVE_KEY_V1 = 'pocket-aquarium:save:v1';
 
 export interface PlacedTank {
   id: string;
@@ -23,7 +29,7 @@ export interface PlacedPath {
   row: number;
 }
 
-export interface SaveData {
+export interface SaveDataV1 {
   version: 1;
   money: number;
   reputation: number;
@@ -31,6 +37,17 @@ export interface SaveData {
   decor: PlacedDecor[];
   paths: PlacedPath[];
   caught: string[];
+}
+
+export interface SaveData {
+  version: 2;
+  money: number;
+  reputation: number;
+  tanks: PlacedTank[];
+  decor: PlacedDecor[];
+  paths: PlacedPath[];
+  caught: string[];
+  ticketPrice: number;
 }
 
 export type BuildTool =
@@ -49,6 +66,7 @@ export interface GameStateData {
   paths: PlacedPath[];
   caught: Set<string>;
   tool: BuildTool;
+  ticketPrice: number;
 }
 
 type Listener = (state: GameStateData) => void;
@@ -74,6 +92,15 @@ export class GameState {
   setTool(tool: BuildTool): void {
     this.data.tool = tool;
     this.emit();
+  }
+
+  setTicketPrice(price: number): void {
+    this.data.ticketPrice = Math.max(MIN_TICKET_PRICE, Math.min(MAX_TICKET_PRICE, Math.round(price)));
+    this.emit();
+  }
+
+  adjustTicketPrice(delta: number): void {
+    this.setTicketPrice(this.data.ticketPrice + delta);
   }
 
   spend(amount: number): boolean {
@@ -149,13 +176,14 @@ export class GameState {
 
   save(): void {
     const serial: SaveData = {
-      version: 1,
+      version: 2,
       money: this.data.money,
       reputation: this.data.reputation,
       tanks: this.data.tanks,
       decor: this.data.decor,
       paths: this.data.paths,
       caught: [...this.data.caught],
+      ticketPrice: this.data.ticketPrice,
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(serial));
@@ -168,6 +196,7 @@ export class GameState {
     this.data = this.defaultState();
     try {
       localStorage.removeItem(SAVE_KEY);
+      localStorage.removeItem(LEGACY_SAVE_KEY_V1);
     } catch {
       /* noop */
     }
@@ -177,18 +206,38 @@ export class GameState {
   private load(): GameStateData | null {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as SaveData;
-      if (parsed.version !== 1) return null;
-      return {
-        money: parsed.money,
-        reputation: parsed.reputation,
-        tanks: parsed.tanks,
-        decor: parsed.decor,
-        paths: parsed.paths,
-        caught: new Set(parsed.caught),
-        tool: { kind: 'none' },
-      };
+      if (raw) {
+        const parsed = JSON.parse(raw) as SaveData;
+        if (parsed.version === 2) {
+          return {
+            money: parsed.money,
+            reputation: parsed.reputation,
+            tanks: parsed.tanks,
+            decor: parsed.decor,
+            paths: parsed.paths,
+            caught: new Set(parsed.caught),
+            tool: { kind: 'none' },
+            ticketPrice: parsed.ticketPrice,
+          };
+        }
+      }
+      const legacyRaw = localStorage.getItem(LEGACY_SAVE_KEY_V1);
+      if (legacyRaw) {
+        const legacy = JSON.parse(legacyRaw) as SaveDataV1;
+        if (legacy.version === 1) {
+          return {
+            money: legacy.money,
+            reputation: legacy.reputation,
+            tanks: legacy.tanks,
+            decor: legacy.decor,
+            paths: legacy.paths,
+            caught: new Set(legacy.caught),
+            tool: { kind: 'none' },
+            ticketPrice: DEFAULT_TICKET_PRICE,
+          };
+        }
+      }
+      return null;
     } catch {
       return null;
     }
@@ -203,6 +252,7 @@ export class GameState {
       paths: [],
       caught: new Set(),
       tool: { kind: 'none' },
+      ticketPrice: DEFAULT_TICKET_PRICE,
     };
   }
 

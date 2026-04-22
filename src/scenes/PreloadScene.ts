@@ -86,6 +86,9 @@ export class PreloadScene extends Phaser.Scene {
 
     this.drawGrid('tile-path', this.pathTileGrid());
     this.drawGrid('tile-floor', this.floorTileGrid());
+    this.drawGrid('tile-grass', this.grassTileGrid());
+    this.drawGrid('tile-wall', this.wallTileGrid());
+    this.drawGrid('tile-door', this.doorTileGrid());
 
     const tankSizes: [number, number][] = [
       [2, 2],
@@ -333,6 +336,83 @@ export class PreloadScene extends Phaser.Scene {
       for (let x = 0; x < TILE_SIZE; x++) {
         const speck = (x * 7 + y * 11) % 23 === 0;
         row.push(speck ? dark : base);
+      }
+      grid.push(row);
+    }
+    return grid;
+  }
+
+  private grassTileGrid(): PixelGrid {
+    const base = PALETTE.grass;
+    const shade = PALETTE.grassShade;
+    const hi = PALETTE.grassHighlight;
+    const grid: PixelGrid = [];
+    for (let y = 0; y < TILE_SIZE; y++) {
+      const row: (number | null)[] = [];
+      for (let x = 0; x < TILE_SIZE; x++) {
+        const blade = (x * 3 + y * 7) % 11 === 0;
+        const dark = (x * 5 + y * 2) % 17 === 0;
+        row.push(blade ? hi : dark ? shade : base);
+      }
+      grid.push(row);
+    }
+    return grid;
+  }
+
+  /** Stone brick wall with light edge on top/left, shadow on bottom/right. */
+  private wallTileGrid(): PixelGrid {
+    const base = PALETTE.brick;
+    const shade = PALETTE.brickShade;
+    const hi = PALETTE.brickHighlight;
+    const grid: PixelGrid = [];
+    for (let y = 0; y < TILE_SIZE; y++) {
+      const row: (number | null)[] = [];
+      for (let x = 0; x < TILE_SIZE; x++) {
+        const topEdge = y === 0;
+        const leftEdge = x === 0;
+        const bottomEdge = y === TILE_SIZE - 1;
+        const rightEdge = x === TILE_SIZE - 1;
+        const brickRow = Math.floor(y / 4);
+        const offset = brickRow % 2 === 0 ? 0 : 4;
+        const mortarX = (x + offset) % 8 === 0;
+        const mortarY = y % 4 === 0;
+
+        if (topEdge || leftEdge) row.push(hi);
+        else if (bottomEdge || rightEdge) row.push(shade);
+        else if (mortarX || mortarY) row.push(shade);
+        else row.push(base);
+      }
+      grid.push(row);
+    }
+    return grid;
+  }
+
+  /** Wooden door with a brass handle. */
+  private doorTileGrid(): PixelGrid {
+    const wood = PALETTE.doorWood;
+    const dark = PALETTE.doorWoodShade;
+    const light = PALETTE.doorWoodHighlight;
+    const handle = PALETTE.doorHandle;
+    const frame = PALETTE.brickShade;
+    const grid: PixelGrid = [];
+    for (let y = 0; y < TILE_SIZE; y++) {
+      const row: (number | null)[] = [];
+      for (let x = 0; x < TILE_SIZE; x++) {
+        if (x === 0 || x === TILE_SIZE - 1 || y === 0) {
+          row.push(frame);
+          continue;
+        }
+        if (x === 1 || x === TILE_SIZE - 2 || y === 1) {
+          row.push(light);
+          continue;
+        }
+        const plankSeam = x === 5 || x === 10;
+        const grain = (x + y * 2) % 7 === 0;
+        if (x === TILE_SIZE - 4 && y === 8) {
+          row.push(handle);
+          continue;
+        }
+        row.push(plankSeam ? dark : grain ? dark : wood);
       }
       grid.push(row);
     }

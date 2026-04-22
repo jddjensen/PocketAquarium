@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, PALETTE } from '../constants';
 import { gameState, type BuildTool } from '../systems/GameState';
 import { ALL_SPECIES, speciesUnlockedAt } from '../data/species';
+import type { ParkScene } from './ParkScene';
 
 interface ToolButton {
   label: string;
@@ -15,7 +16,9 @@ const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#f4f4f4' } as c
 export class UIScene extends Phaser.Scene {
   private moneyText!: Phaser.GameObjects.Text;
   private repText!: Phaser.GameObjects.Text;
-  private toolText!: Phaser.GameObjects.Text;
+  private priceText!: Phaser.GameObjects.Text;
+  private demandText!: Phaser.GameObjects.Text;
+  private toolCaption!: Phaser.GameObjects.Text;
   private buttons: ToolButton[] = [];
   private fishPanelOpen = false;
   private fishPanel: Phaser.GameObjects.Container | null = null;
@@ -30,17 +33,40 @@ export class UIScene extends Phaser.Scene {
     gameState.subscribe((s) => {
       this.moneyText.setText(`$${s.money}`);
       this.repText.setText(`REP ${s.reputation}`);
-      this.toolText.setText(this.labelForTool(s.tool));
+      this.priceText.setText(`$${s.ticketPrice}`);
+      this.toolCaption.setText(this.labelForTool(s.tool));
+      this.toolCaption.setVisible(s.tool.kind !== 'none');
       this.refreshButtons();
     });
+  }
+
+  update(): void {
+    const park = this.scene.get('ParkScene') as ParkScene | undefined;
+    if (!park || typeof park.willingnessToPay !== 'function') return;
+    const willingness = park.willingnessToPay();
+    const price = gameState.snapshot.ticketPrice;
+    const pays = willingness >= price;
+    this.demandText.setText(`DEMAND $${willingness.toFixed(1)}`);
+    this.demandText.setColor(pays ? '#63c74d' : '#ef7d57');
   }
 
   private drawHudBar(): void {
     const bar = this.add.rectangle(0, 0, GAME_WIDTH, 10, PALETTE.uiBg, 0.9).setOrigin(0, 0);
     bar.setStrokeStyle(1, PALETTE.stoneShadow);
     this.moneyText = this.add.text(3, 1, '$0', { ...FONT, color: '#ffcd75' });
-    this.repText = this.add.text(40, 1, 'REP 0', { ...FONT, color: '#73eff7' });
-    this.toolText = this.add.text(90, 1, 'Tool: none', FONT);
+    this.repText = this.add.text(38, 1, 'REP 0', { ...FONT, color: '#73eff7' });
+
+    // Compact price control: [-] $X [+]
+    const priceOriginX = 82;
+    this.addTextButton(priceOriginX, 1, '-', () => gameState.adjustTicketPrice(-1)).setColor(
+      '#ef7d57',
+    );
+    this.priceText = this.add.text(priceOriginX + 8, 1, '$5', { ...FONT, color: '#ffcd75' });
+    this.addTextButton(priceOriginX + 28, 1, '+', () => gameState.adjustTicketPrice(+1)).setColor(
+      '#63c74d',
+    );
+
+    this.demandText = this.add.text(priceOriginX + 40, 1, 'DEMAND $0', { ...FONT, color: '#63c74d' });
 
     this.addTextButton(GAME_WIDTH - 56, 1, 'FISH', () => this.toggleFishPanel()).setColor('#94b0c2');
     this.addTextButton(GAME_WIDTH - 28, 1, 'SAVE', () => gameState.save()).setColor('#38b764');
@@ -48,7 +74,15 @@ export class UIScene extends Phaser.Scene {
 
   private drawBuildBar(): void {
     const barY = GAME_HEIGHT - 16;
-    this.add.rectangle(0, barY, GAME_WIDTH, 16, PALETTE.uiBg, 0.9).setOrigin(0, 0).setStrokeStyle(1, PALETTE.stoneShadow);
+    this.add
+      .rectangle(0, barY, GAME_WIDTH, 16, PALETTE.uiBg, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, PALETTE.stoneShadow);
+
+    // Floating tool caption — sits just above the build bar when a tool is active.
+    this.toolCaption = this.add
+      .text(3, barY - 9, '', { ...FONT, color: '#73eff7' })
+      .setVisible(false);
 
     const tools: { label: string; tool: BuildTool }[] = [
       { label: 'none', tool: { kind: 'none' } },
@@ -96,19 +130,19 @@ export class UIScene extends Phaser.Scene {
   private labelForTool(t: BuildTool): string {
     switch (t.kind) {
       case 'none':
-        return 'Tool: none';
+        return '';
       case 'path':
-        return 'Tool: path $5';
+        return 'path  $5';
       case 'tank':
-        return `Tool: tank ${t.size.w}x${t.size.h} $${50 * t.size.w * t.size.h}`;
+        return `tank ${t.size.w}x${t.size.h}  $${50 * t.size.w * t.size.h}`;
       case 'decor':
-        return `Tool: ${t.decor}`;
+        return `${t.decor}  $${t.decor === 'plant' ? 15 : 10}`;
       case 'fish': {
         const species = ALL_SPECIES.find((s) => s.id === t.speciesId);
-        return species ? `Tool: stock ${species.name} $${species.price}` : 'Tool: stock fish';
+        return species ? `stock ${species.name}  $${species.price}` : 'stock fish';
       }
       case 'erase':
-        return 'Tool: erase';
+        return 'erase (+$2)';
     }
   }
 
